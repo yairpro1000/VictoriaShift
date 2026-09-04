@@ -1,0 +1,57 @@
+import { Link } from 'react-router-dom'
+import { ApproveFooter } from '../components/ApproveFooter'
+import { Board } from '../components/Board'
+import { CelebrationModal } from '../components/CelebrationModal'
+import { useTeardownData } from '../hooks/useTeardownData.jsx'
+
+export function ChecklistPage() {
+  const {
+    tasksByStatus,
+    toggleTask,
+    setTaskDone,
+    approveShift,
+    approvalMessage,
+    isApprovalOpen,
+    dismissApproval,
+    areAllTasksDone,
+    loading,
+    errorMessage,
+    syncMessage,
+  } = useTeardownData()
+
+  return (
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="app-header__row">
+          <div>
+            <p className="eyebrow">Victoria Restaurant</p>
+            <h1>Shift Teardown</h1>
+          </div>
+          <Link className="header-link" to="/manager">
+            Manager
+          </Link>
+        </div>
+        <p className="intro">
+          Tap cards to move them fast. Dragging is available, but secondary.
+        </p>
+        {loading ? <p className="status-banner">Loading live board…</p> : null}
+        {errorMessage ? <p className="status-banner status-banner--warning">{errorMessage}</p> : null}
+        {syncMessage ? <p className="status-banner status-banner--muted">{syncMessage}</p> : null}
+      </header>
+
+      <Board
+        tasksByStatus={tasksByStatus}
+        onToggleTask={toggleTask}
+        onSetTaskDone={setTaskDone}
+      />
+
+      <ApproveFooter disabled={!areAllTasksDone} onApprove={approveShift} />
+
+      <CelebrationModal
+        isOpen={isApprovalOpen}
+        message={approvalMessage}
+        onClose={dismissApproval}
+      />
+    </div>
+  )
+}
