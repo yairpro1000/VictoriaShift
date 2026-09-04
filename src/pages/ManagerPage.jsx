@@ -7,7 +7,6 @@ const EMPTY_CATEGORY = {
   name: '',
   color: '#ffd166',
   sort_order: '',
-  urgent: false,
 }
 
 const EMPTY_TASK = {
@@ -259,11 +258,21 @@ export function ManagerPage() {
       name: category.name,
       color: category.color,
       sort_order: String(category.sort_order),
-      urgent: category.urgent,
     })
   }
 
   const confirmDeleteCategory = (category) => {
+    const taskCount = tasks.filter((task) => task.category_id === category.id).length
+
+    if (taskCount > 0) {
+      openNoticeDialog({
+        title: 'Category still has tasks',
+        message: `"${category.name}" still has ${taskCount} task${taskCount === 1 ? '' : 's'}. Delete those tasks first or move them to another category, then try again.`,
+        tone: 'warning',
+      })
+      return
+    }
+
     openConfirmDialog({
       title: 'Delete category?',
       message: `Are you sure you want to delete category "${category.name}"?`,
@@ -276,9 +285,8 @@ export function ManagerPage() {
             resetCategoryForm()
           }
         } catch (error) {
-          console.error('Failed to delete category.', error)
           openNoticeDialog({
-            title: 'Category cannot be deleted',
+            title: 'Category could not be deleted',
             message: error.message || 'Failed to delete category.',
             tone: 'warning',
           })
@@ -412,16 +420,6 @@ export function ManagerPage() {
                   required
                 />
               </label>
-              <label className="checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={categoryDraft.urgent}
-                  onChange={(event) =>
-                    setCategoryDraft((current) => ({ ...current, urgent: event.target.checked }))
-                  }
-                />
-                Urgent
-              </label>
               <div className="manager-form__actions">
                 <button className="primary-button" type="submit">
                   Create category
@@ -447,7 +445,6 @@ export function ManagerPage() {
                       style={{ backgroundColor: category.color }}
                     />
                     {category.color} · order {category.sort_order}
-                    {category.urgent ? ' · urgent' : ''}
                   </p>
                 </div>
 
@@ -492,16 +489,6 @@ export function ManagerPage() {
                           setCategoryDraft((current) => ({ ...current, sort_order: event.target.value }))
                         }
                       />
-                    </label>
-                    <label className="checkbox-row">
-                      <input
-                        type="checkbox"
-                        checked={categoryDraft.urgent}
-                        onChange={(event) =>
-                          setCategoryDraft((current) => ({ ...current, urgent: event.target.checked }))
-                        }
-                      />
-                      Urgent
                     </label>
                     <div className="manager-item__actions">
                       <button
@@ -616,7 +603,7 @@ export function ManagerPage() {
             {groupedTasks.map(({ category, tasks: categoryTasks }) => (
               <section
                 key={category.id}
-                className={`category-section${category.urgent ? ' category-section--urgent' : ''}`}
+                className="category-section"
                 style={{ '--category-color': category.color }}
               >
                 <div className="category-section__header">
@@ -791,7 +778,7 @@ export function ManagerPage() {
                 </>
               ) : (
                 <button className="primary-button" type="button" onClick={closeDialog}>
-                  OK
+                  Close
                 </button>
               )}
             </div>

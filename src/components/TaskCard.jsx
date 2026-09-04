@@ -13,9 +13,7 @@ export function TaskCard({ task, category, onToggle, interactive = true }) {
 
   return (
     <article
-      className={`task-card${task.done ? ' task-card--done' : ''}${
-        category.urgent ? ' task-card--urgent' : ''
-      }`}
+      className={`task-card${task.done ? ' task-card--done' : ''}`}
       draggable={interactive}
       onDragStart={interactive ? handleDragStart : undefined}
       onClick={interactive ? () => onToggle(task.id) : undefined}

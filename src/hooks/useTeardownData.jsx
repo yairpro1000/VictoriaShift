@@ -242,7 +242,6 @@ export function TeardownDataProvider({ children }) {
       name: draft.name.trim(),
       color: draft.color.trim(),
       sort_order: Number(draft.sort_order),
-      urgent: Boolean(draft.urgent),
     }
 
     const savedCategory = categoryId

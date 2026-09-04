@@ -27,9 +27,7 @@ export function CategorySection({
 
   return (
     <section
-      className={`category-section${allDone ? ' category-section--complete' : ''}${
-        category.urgent ? ' category-section--urgent' : ''
-      }`}
+      className={`category-section${allDone ? ' category-section--complete' : ''}`}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       aria-label={category.name}
