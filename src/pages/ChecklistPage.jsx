@@ -12,7 +12,13 @@ export function ChecklistPage() {
     approveShift,
     approvalMessage,
     isApprovalOpen,
+    approvalStep,
+    approvalError,
+    isApprovalSaving,
+    isBoardResetting,
     dismissApproval,
+    submitApproval,
+    resetBoard,
     areAllTasksDone,
     loading,
     errorMessage,
@@ -49,8 +55,14 @@ export function ChecklistPage() {
 
       <CelebrationModal
         isOpen={isApprovalOpen}
+        step={approvalStep}
         message={approvalMessage}
+        errorMessage={approvalError}
+        isSaving={isApprovalSaving}
+        isResetting={isBoardResetting}
+        onSubmitName={submitApproval}
         onClose={dismissApproval}
+        onResetBoard={resetBoard}
       />
     </div>
   )

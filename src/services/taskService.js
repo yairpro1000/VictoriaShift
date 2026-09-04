@@ -73,6 +73,24 @@ export async function deleteTask(taskId) {
   }
 }
 
+export async function resetAllTasksDoneState() {
+  const supabase = requireSupabase()
+  const { data, error } = await supabase
+    .from('tasks')
+    .update({
+      done: false,
+      completed_at: null,
+    })
+    .not('id', 'is', null)
+    .select()
+
+  if (error) {
+    throw error
+  }
+
+  return data ?? []
+}
+
 export function subscribeToTaskChanges({ onCategoryChange, onTaskChange }) {
   const supabase = requireSupabase()
 

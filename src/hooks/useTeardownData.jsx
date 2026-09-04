@@ -6,10 +6,12 @@ import {
   useState,
 } from 'react'
 import { fetchCategories, createCategory, updateCategory, deleteCategory } from '../services/categoryService'
+import { createApprovalRecord } from '../services/approvalService'
 import {
   createTask,
   deleteTask,
   fetchTasks,
+  resetAllTasksDoneState,
   subscribeToTaskChanges,
   updateTask,
   updateTaskDoneState,
@@ -99,6 +101,10 @@ export function TeardownDataProvider({ children }) {
   const [syncMessage, setSyncMessage] = useState('')
   const [approvalMessage, setApprovalMessage] = useState('')
   const [isApprovalOpen, setIsApprovalOpen] = useState(false)
+  const [approvalStep, setApprovalStep] = useState('form')
+  const [approvalError, setApprovalError] = useState('')
+  const [isApprovalSaving, setIsApprovalSaving] = useState(false)
+  const [isBoardResetting, setIsBoardResetting] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -199,6 +205,8 @@ export function TeardownDataProvider({ children }) {
     )
     setApprovalMessage('')
     setIsApprovalOpen(false)
+    setApprovalStep('form')
+    setApprovalError('')
     setSyncMessage('')
 
     try {
@@ -226,15 +234,121 @@ export function TeardownDataProvider({ children }) {
 
   const approveShift = () => {
     if (!areAllTasksDone) {
+      console.info('approve_shift_blocked', {
+        reason: 'not_all_tasks_done',
+        totalTasks: tasks.length,
+        remainingTasks: tasks.filter((task) => !task.done).length,
+      })
       return
     }
 
+    console.info('approve_shift_opened', {
+      totalTasks: tasks.length,
+      doneTasks: tasks.filter((task) => task.done).length,
+    })
     setApprovalMessage('Good, papi, good!')
+    setApprovalStep('form')
+    setApprovalError('')
     setIsApprovalOpen(true)
   }
 
   const dismissApproval = () => {
+    if (isApprovalSaving || isBoardResetting) {
+      return
+    }
+
     setIsApprovalOpen(false)
+    setApprovalStep('form')
+    setApprovalError('')
+  }
+
+  const submitApproval = async (name) => {
+    const trimmedName = name.trim()
+
+    console.info('approval_submit_attempt', {
+      hasName: Boolean(trimmedName),
+      totalTasks: tasks.length,
+      allTasksDone: areAllTasksDone,
+    })
+
+    if (!trimmedName) {
+      setApprovalError('Enter a name before approving.')
+      console.info('approval_submit_blocked', {
+        reason: 'missing_name',
+      })
+      return false
+    }
+
+    if (!areAllTasksDone) {
+      setApprovalError('All tasks must be done before approval.')
+      console.info('approval_submit_blocked', {
+        reason: 'tasks_not_done',
+        remainingTasks: tasks.filter((task) => !task.done).length,
+      })
+      return false
+    }
+
+    const approvedAt = new Date().toISOString()
+    setIsApprovalSaving(true)
+    setApprovalError('')
+
+    try {
+      await createApprovalRecord(trimmedName, approvedAt)
+      console.info('approval_submit_succeeded', {
+        name: trimmedName,
+        approvedAt,
+      })
+      setApprovalStep('celebration')
+      return true
+    } catch (error) {
+      const reason = error?.message || 'Approval could not be saved.'
+      console.error('approval_submit_failed', {
+        name: trimmedName,
+        approvedAt,
+        reason,
+        code: error?.code ?? null,
+        details: error?.details ?? null,
+        hint: error?.hint ?? null,
+      })
+      setApprovalError(
+        'Approval could not be saved. Confirm the `shift_approvals` table and insert policy are set up in Supabase, then try again.',
+      )
+      return false
+    } finally {
+      setIsApprovalSaving(false)
+    }
+  }
+
+  const resetBoard = async () => {
+    console.info('reset_board_attempt', {
+      totalTasks: tasks.length,
+      doneTasks: tasks.filter((task) => task.done).length,
+    })
+
+    setIsBoardResetting(true)
+    setSyncMessage('')
+
+    try {
+      const resetTasks = await resetAllTasksDoneState()
+      setTasks(sortTasks(resetTasks))
+      console.info('reset_board_succeeded', {
+        updatedTasks: resetTasks.length,
+      })
+      setIsApprovalOpen(false)
+      setApprovalStep('form')
+      setApprovalError('')
+    } catch (error) {
+      const reason = error?.message || 'Board reset failed.'
+      console.error('reset_board_failed', {
+        reason,
+        code: error?.code ?? null,
+        details: error?.details ?? null,
+        hint: error?.hint ?? null,
+      })
+      setApprovalError('Board reset failed. Please try again.')
+    } finally {
+      setIsBoardResetting(false)
+    }
   }
 
   const saveCategory = async (draft, categoryId) => {
@@ -297,7 +411,13 @@ export function TeardownDataProvider({ children }) {
     approveShift,
     approvalMessage,
     isApprovalOpen,
+    approvalStep,
+    approvalError,
+    isApprovalSaving,
+    isBoardResetting,
     dismissApproval,
+    submitApproval,
+    resetBoard,
     saveCategory,
     removeCategory,
     saveTask,
