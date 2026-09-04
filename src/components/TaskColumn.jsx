@@ -1,13 +1,15 @@
+import { forwardRef } from 'react'
 import { CategorySection } from './CategorySection'
 
-export function TaskColumn({
+export const TaskColumn = forwardRef(function TaskColumn({
   title,
+  helperText,
   count,
   categories,
   isDoneColumn,
   onToggleTask,
   onSetTaskDone,
-}) {
+}, ref) {
   const handleDragOver = (event) => {
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
@@ -26,6 +28,7 @@ export function TaskColumn({
 
   return (
     <section
+      ref={ref}
       className={`task-column${isDoneColumn ? ' task-column--done' : ''}`}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
@@ -34,6 +37,7 @@ export function TaskColumn({
         <h2>
           {title} <span>&middot; {count}</span>
         </h2>
+        {helperText ? <p className="task-column__hint">{helperText}</p> : null}
       </header>
       <div className="task-column__content">
         {categories.length ? (
@@ -55,4 +59,4 @@ export function TaskColumn({
       </div>
     </section>
   )
-}
+})

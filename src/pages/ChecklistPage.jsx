@@ -30,16 +30,13 @@ export function ChecklistPage() {
       <header className="app-header">
         <div className="app-header__row">
           <div>
-            <p className="eyebrow">Victoria Restaurant</p>
+            <p className="eyebrow">PASTA &amp; MORE</p>
             <h1>Shift Teardown</h1>
           </div>
           <Link className="header-link" to="/manager">
             Manager
           </Link>
         </div>
-        <p className="intro">
-          Tap cards to move them fast. Dragging is available, but secondary.
-        </p>
         {loading ? <p className="status-banner">Loading live board…</p> : null}
         {errorMessage ? <p className="status-banner status-banner--warning">{errorMessage}</p> : null}
         {syncMessage ? <p className="status-banner status-banner--muted">{syncMessage}</p> : null}
