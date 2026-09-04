@@ -564,6 +564,10 @@ article {
   border: 1px solid rgba(24, 32, 29, 0.08);
 }
 
+.manager-item--editing {
+  display: grid;
+}
+
 .manager-item__title {
   margin: 0;
   font-weight: 800;
@@ -573,6 +577,26 @@ article {
 .manager-item__detail {
   margin: 0.3rem 0 0;
   color: var(--muted);
+}
+
+.manager-item__editor {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.manager-item__editor label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 700;
+}
+
+.manager-item__editor input {
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(24, 32, 29, 0.14);
+  border-radius: 0.9rem;
+  font: inherit;
+  background: white;
 }
 
 .manager-lock {
@@ -670,6 +694,45 @@ article {
   font-size: 0.86rem;
   font-weight: 700;
   color: var(--muted);
+}
+
+.manager-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(24, 32, 29, 0.5);
+  backdrop-filter: blur(8px);
+}
+
+.manager-modal__card {
+  width: min(100%, 28rem);
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.25rem;
+  border-radius: 1.4rem;
+  background: rgba(255, 250, 244, 0.98);
+  box-shadow: 0 22px 56px rgba(24, 32, 29, 0.24);
+}
+
+.manager-modal__card h2,
+.manager-modal__card p {
+  margin: 0;
+}
+
+.manager-modal__card--warning {
+  box-shadow:
+    0 22px 56px rgba(24, 32, 29, 0.24),
+    inset 0 0 0 1px rgba(184, 50, 50, 0.16);
+}
+
+.manager-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
 }
 
 .color-swatch {

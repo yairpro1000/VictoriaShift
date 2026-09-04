@@ -21,6 +21,13 @@ const EMPTY_TASK = {
 
 const MANAGER_PASSWORD = 'papi3823'
 const MANAGER_SESSION_KEY = 'victoria-shift-manager-unlocked'
+const EMPTY_DIALOG = {
+  title: '',
+  message: '',
+  confirmLabel: '',
+  tone: 'default',
+  onConfirm: null,
+}
 
 function groupTasksByCategory(categories, tasks) {
   return categories
@@ -54,6 +61,9 @@ export function ManagerPage() {
   const [passwordValue, setPasswordValue] = useState('')
   const [passwordError, setPasswordError] = useState('')
   const [isUnlocked, setIsUnlocked] = useState(false)
+  const [dialogState, setDialogState] = useState(EMPTY_DIALOG)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isDialogBusy, setIsDialogBusy] = useState(false)
 
   const orderedCategories = useMemo(
     () => [...categories].sort((left, right) => left.sort_order - right.sort_order),
@@ -96,22 +106,77 @@ export function ManagerPage() {
     }
   }, [newTaskDraft.category_id, orderedCategories])
 
-  const handleCategorySubmit = async (event) => {
-    event.preventDefault()
-
-    if (!categoryDraft.name.trim() || Number.isNaN(Number(categoryDraft.sort_order))) {
-      setCategoryStatus('Category name and numeric order are required.')
+  const closeDialog = () => {
+    if (isDialogBusy) {
       return
     }
 
+    setIsDialogOpen(false)
+    setDialogState(EMPTY_DIALOG)
+  }
+
+  const openNoticeDialog = ({ title, message, tone = 'default' }) => {
+    setDialogState({
+      title,
+      message,
+      confirmLabel: '',
+      tone,
+      onConfirm: null,
+    })
+    setIsDialogBusy(false)
+    setIsDialogOpen(true)
+  }
+
+  const openConfirmDialog = ({ title, message, confirmLabel, tone = 'danger', onConfirm }) => {
+    setDialogState({
+      title,
+      message,
+      confirmLabel,
+      tone,
+      onConfirm,
+    })
+    setIsDialogBusy(false)
+    setIsDialogOpen(true)
+  }
+
+  const handleDialogConfirm = async () => {
+    if (!dialogState.onConfirm) {
+      closeDialog()
+      return
+    }
+
+    setIsDialogBusy(true)
+
     try {
-      await saveCategory(categoryDraft, editingCategoryId)
-      setCategoryStatus(editingCategoryId ? 'Category updated.' : 'Category created.')
+      await dialogState.onConfirm()
+      setIsDialogOpen(false)
+      setDialogState(EMPTY_DIALOG)
+    } finally {
+      setIsDialogBusy(false)
+    }
+  }
+
+  const submitCategoryDraft = async (categoryId = null) => {
+    if (!categoryDraft.name.trim() || Number.isNaN(Number(categoryDraft.sort_order))) {
+      setCategoryStatus('Category name and numeric order are required.')
+      return false
+    }
+
+    try {
+      await saveCategory(categoryDraft, categoryId)
+      setCategoryStatus(categoryId ? 'Category updated.' : 'Category created.')
       resetCategoryForm()
+      return true
     } catch (error) {
       console.error('Failed to save category.', error)
       setCategoryStatus(error.message || 'Failed to save category.')
+      return false
     }
+  }
+
+  const handleCategorySubmit = async (event) => {
+    event.preventDefault()
+    await submitCategoryDraft()
   }
 
   const handleTaskSubmit = async (event) => {
@@ -188,6 +253,64 @@ export function ManagerPage() {
     }
   }
 
+  const startCategoryEdit = (category) => {
+    setEditingCategoryId(category.id)
+    setCategoryDraft({
+      name: category.name,
+      color: category.color,
+      sort_order: String(category.sort_order),
+      urgent: category.urgent,
+    })
+  }
+
+  const confirmDeleteCategory = (category) => {
+    openConfirmDialog({
+      title: 'Delete category?',
+      message: `Are you sure you want to delete category "${category.name}"?`,
+      confirmLabel: 'Delete category',
+      onConfirm: async () => {
+        try {
+          await removeCategory(category.id)
+          setCategoryStatus('Category deleted.')
+          if (editingCategoryId === category.id) {
+            resetCategoryForm()
+          }
+        } catch (error) {
+          console.error('Failed to delete category.', error)
+          openNoticeDialog({
+            title: 'Category cannot be deleted',
+            message: error.message || 'Failed to delete category.',
+            tone: 'warning',
+          })
+        }
+      },
+    })
+  }
+
+  const confirmDeleteTask = (task) => {
+    openConfirmDialog({
+      title: 'Delete task?',
+      message: `Are you sure you want to delete task "${task.name}"?`,
+      confirmLabel: 'Delete task',
+      onConfirm: async () => {
+        try {
+          await removeTask(task.id)
+          setTaskStatus('Task deleted.')
+          if (editingTaskId === task.id) {
+            resetTaskForm()
+          }
+        } catch (error) {
+          console.error('Failed to delete task.', error)
+          openNoticeDialog({
+            title: 'Task could not be deleted',
+            message: error.message || 'Failed to delete task.',
+            tone: 'warning',
+          })
+        }
+      },
+    })
+  }
+
   return (
     <div className="manager-shell">
       {!isUnlocked ? (
@@ -244,76 +367,78 @@ export function ManagerPage() {
             </button>
           </div>
 
-          <form className="manager-form" onSubmit={handleCategorySubmit}>
-            <label>
-              Name
-              <input
-                type="text"
-                value={categoryDraft.name}
-                onChange={(event) =>
-                  setCategoryDraft((current) => ({ ...current, name: event.target.value }))
-                }
-                required
-              />
-            </label>
-            <label>
-              Color
-              <div className="color-row">
-                <input
-                  type="color"
-                  value={categoryDraft.color}
-                  onChange={(event) =>
-                    setCategoryDraft((current) => ({ ...current, color: event.target.value }))
-                  }
-                />
+          {!editingCategoryId ? (
+            <form className="manager-form" onSubmit={handleCategorySubmit}>
+              <label>
+                Name
                 <input
                   type="text"
-                  value={categoryDraft.color}
+                  value={categoryDraft.name}
                   onChange={(event) =>
-                    setCategoryDraft((current) => ({ ...current, color: event.target.value }))
+                    setCategoryDraft((current) => ({ ...current, name: event.target.value }))
                   }
-                  pattern="^#([A-Fa-f0-9]{6})$"
                   required
                 />
-              </div>
-            </label>
-            <label>
-              Order
-              <input
-                type="number"
-                value={categoryDraft.sort_order}
-                onChange={(event) =>
-                  setCategoryDraft((current) => ({ ...current, sort_order: event.target.value }))
-                }
-                required
-              />
-            </label>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={categoryDraft.urgent}
-                onChange={(event) =>
-                  setCategoryDraft((current) => ({ ...current, urgent: event.target.checked }))
-                }
-              />
-              Urgent
-            </label>
-            <div className="manager-form__actions">
-              <button className="primary-button" type="submit">
-                {editingCategoryId ? 'Save category' : 'Create category'}
-              </button>
-              {editingCategoryId ? (
-                <button className="secondary-button" type="button" onClick={resetCategoryForm}>
-                  Cancel
+              </label>
+              <label>
+                Color
+                <div className="color-row">
+                  <input
+                    type="color"
+                    value={categoryDraft.color}
+                    onChange={(event) =>
+                      setCategoryDraft((current) => ({ ...current, color: event.target.value }))
+                    }
+                  />
+                  <input
+                    type="text"
+                    value={categoryDraft.color}
+                    onChange={(event) =>
+                      setCategoryDraft((current) => ({ ...current, color: event.target.value }))
+                    }
+                    pattern="^#([A-Fa-f0-9]{6})$"
+                    required
+                  />
+                </div>
+              </label>
+              <label>
+                Order
+                <input
+                  type="number"
+                  value={categoryDraft.sort_order}
+                  onChange={(event) =>
+                    setCategoryDraft((current) => ({ ...current, sort_order: event.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={categoryDraft.urgent}
+                  onChange={(event) =>
+                    setCategoryDraft((current) => ({ ...current, urgent: event.target.checked }))
+                  }
+                />
+                Urgent
+              </label>
+              <div className="manager-form__actions">
+                <button className="primary-button" type="submit">
+                  Create category
                 </button>
-              ) : null}
-            </div>
-            {categoryStatus ? <p className="manager-status">{categoryStatus}</p> : null}
-          </form>
+              </div>
+              {categoryStatus ? <p className="manager-status">{categoryStatus}</p> : null}
+            </form>
+          ) : (
+            categoryStatus ? <p className="manager-status">{categoryStatus}</p> : null
+          )}
 
           <div className="manager-list">
             {orderedCategories.map((category) => (
-              <article key={category.id} className="manager-item">
+              <article
+                key={category.id}
+                className={`manager-item${editingCategoryId === category.id ? ' manager-item--editing' : ''}`}
+              >
                 <div>
                   <p className="manager-item__title">{category.name}</p>
                   <p className="manager-item__meta">
@@ -325,38 +450,97 @@ export function ManagerPage() {
                     {category.urgent ? ' · urgent' : ''}
                   </p>
                 </div>
-                <div className="manager-item__actions">
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() => {
-                      setEditingCategoryId(category.id)
-                      setCategoryDraft({
-                        name: category.name,
-                        color: category.color,
-                        sort_order: String(category.sort_order),
-                        urgent: category.urgent,
-                      })
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    className="danger-button"
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await removeCategory(category.id)
-                        setCategoryStatus('Category deleted.')
-                      } catch (error) {
-                        console.error('Failed to delete category.', error)
-                        setCategoryStatus(error.message || 'Failed to delete category.')
-                      }
-                    }}
-                  >
-                    Delete
-                  </button>
-                </div>
+
+                {editingCategoryId === category.id ? (
+                  <div className="manager-item__editor">
+                    <label>
+                      Name
+                      <input
+                        type="text"
+                        value={categoryDraft.name}
+                        onChange={(event) =>
+                          setCategoryDraft((current) => ({ ...current, name: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Color
+                      <div className="color-row">
+                        <input
+                          type="color"
+                          value={categoryDraft.color}
+                          onChange={(event) =>
+                            setCategoryDraft((current) => ({ ...current, color: event.target.value }))
+                          }
+                        />
+                        <input
+                          type="text"
+                          value={categoryDraft.color}
+                          onChange={(event) =>
+                            setCategoryDraft((current) => ({ ...current, color: event.target.value }))
+                          }
+                          pattern="^#([A-Fa-f0-9]{6})$"
+                        />
+                      </div>
+                    </label>
+                    <label>
+                      Order
+                      <input
+                        type="number"
+                        value={categoryDraft.sort_order}
+                        onChange={(event) =>
+                          setCategoryDraft((current) => ({ ...current, sort_order: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={categoryDraft.urgent}
+                        onChange={(event) =>
+                          setCategoryDraft((current) => ({ ...current, urgent: event.target.checked }))
+                        }
+                      />
+                      Urgent
+                    </label>
+                    <div className="manager-item__actions">
+                      <button
+                        className="primary-button"
+                        type="button"
+                        onClick={() => submitCategoryDraft(category.id)}
+                      >
+                        Save category
+                      </button>
+                      <button className="secondary-button" type="button" onClick={resetCategoryForm}>
+                        Cancel
+                      </button>
+                      <button
+                        className="danger-button"
+                        type="button"
+                        onClick={() => confirmDeleteCategory(category)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="manager-item__actions">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => startCategoryEdit(category)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="danger-button"
+                      type="button"
+                      onClick={() => confirmDeleteCategory(category)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
               </article>
             ))}
           </div>
@@ -545,16 +729,7 @@ export function ManagerPage() {
                               <button
                                 className="danger-button"
                                 type="button"
-                                onClick={async () => {
-                                  try {
-                                    await removeTask(task.id)
-                                    setTaskStatus('Task deleted.')
-                                    resetTaskForm()
-                                  } catch (error) {
-                                    console.error('Failed to delete task.', error)
-                                    setTaskStatus(error.message || 'Failed to delete task.')
-                                  }
-                                }}
+                                onClick={() => confirmDeleteTask(task)}
                               >
                                 Delete
                               </button>
@@ -573,15 +748,7 @@ export function ManagerPage() {
                             <button
                               className="danger-button"
                               type="button"
-                              onClick={async () => {
-                                try {
-                                  await removeTask(task.id)
-                                  setTaskStatus('Task deleted.')
-                                } catch (error) {
-                                  console.error('Failed to delete task.', error)
-                                  setTaskStatus(error.message || 'Failed to delete task.')
-                                }
-                              }}
+                              onClick={() => confirmDeleteTask(task)}
                             >
                               Delete
                             </button>
@@ -596,6 +763,41 @@ export function ManagerPage() {
           </div>
         </section>
       </main>
+
+      {isDialogOpen ? (
+        <div className="manager-modal" role="dialog" aria-modal="true" aria-labelledby="manager-dialog-title">
+          <div className={`manager-modal__card manager-modal__card--${dialogState.tone}`}>
+            <h2 id="manager-dialog-title">{dialogState.title}</h2>
+            <p>{dialogState.message}</p>
+            <div className="manager-modal__actions">
+              {dialogState.onConfirm ? (
+                <>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={closeDialog}
+                    disabled={isDialogBusy}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="danger-button"
+                    type="button"
+                    onClick={handleDialogConfirm}
+                    disabled={isDialogBusy}
+                  >
+                    {isDialogBusy ? 'Working…' : dialogState.confirmLabel}
+                  </button>
+                </>
+              ) : (
+                <button className="primary-button" type="button" onClick={closeDialog}>
+                  OK
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
