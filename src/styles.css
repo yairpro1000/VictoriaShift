@@ -357,7 +357,7 @@ article {
   font-weight: 800;
   letter-spacing: 0.04em;
   color: #fffaf4;
-  background: rgba(24, 32, 29, 0.92);
+  background: rgba(0, 0, 0, 0.35);
   box-shadow: 0 14px 30px rgba(24, 32, 29, 0.22);
   backdrop-filter: blur(10px);
 }

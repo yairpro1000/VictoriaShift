@@ -9,20 +9,29 @@ export function Board({ tasksByStatus, onToggleTask, onSetTaskDone }) {
   const doneCount = tasksByStatus.done.totalCount
 
   useEffect(() => {
-    const doneElement = doneRef.current
-
-    if (!doneElement || typeof IntersectionObserver === 'undefined') {
+    if (typeof window === 'undefined') {
       return undefined
     }
 
-    const observer = new IntersectionObserver(([entry]) => {
-      setIsDoneVisible(entry.isIntersecting)
-    }, { threshold: 0.2 })
+    const updateDoneVisibility = () => {
+      const doneElement = doneRef.current
 
-    observer.observe(doneElement)
+      if (!doneElement) {
+        return
+      }
+
+      const { top, bottom } = doneElement.getBoundingClientRect()
+      const viewportTop = 0
+      setIsDoneVisible(top <= viewportTop && bottom > viewportTop)
+    }
+
+    updateDoneVisibility()
+    window.addEventListener('scroll', updateDoneVisibility, { passive: true })
+    window.addEventListener('resize', updateDoneVisibility)
 
     return () => {
-      observer.disconnect()
+      window.removeEventListener('scroll', updateDoneVisibility)
+      window.removeEventListener('resize', updateDoneVisibility)
     }
   }, [])
 
