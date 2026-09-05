@@ -1,3 +1,5 @@
+import { getTaskIcon } from './icons/taskIcons'
+
 function formatEmployeeName(employee) {
   if (!employee) {
     return 'Unknown'
@@ -20,6 +22,8 @@ function formatCompletedTime(completedAt) {
 }
 
 export function TaskCard({ task, category, onToggle, interactive = true }) {
+  const TaskIcon = getTaskIcon(task.id)
+
   const handleDragStart = (event) => {
     event.dataTransfer.setData('text/plain', task.id)
     event.dataTransfer.effectAllowed = 'move'
@@ -57,6 +61,11 @@ export function TaskCard({ task, category, onToggle, interactive = true }) {
         '--task-color': category.color,
       }}
     >
+      {TaskIcon ? (
+        <span className="task-card__icon" aria-hidden="true">
+          <TaskIcon />
+        </span>
+      ) : null}
       <div className="task-card__content">
         <p className="task-card__title">{task.name}</p>
         {task.action ? <p className="task-card__action">{task.action}</p> : null}
