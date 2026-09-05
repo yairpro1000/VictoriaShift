@@ -5,6 +5,7 @@ export async function fetchCategories() {
   const { data, error } = await supabase
     .from('categories')
     .select('*')
+    .order('protocol_id', { ascending: true, nullsFirst: false })
     .order('sort_order', { ascending: true })
 
   if (error) {

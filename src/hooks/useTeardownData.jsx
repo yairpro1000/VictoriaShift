@@ -6,8 +6,9 @@ import {
   useState,
 } from 'react'
 import { fetchCategories, createCategory, updateCategory, deleteCategory } from '../services/categoryService'
+import { createApprovalRecord, fetchApprovalHistory } from '../services/approvalService'
 import { createEmployee, deleteEmployee, fetchEmployees, updateEmployee } from '../services/employeeService'
-import { createApprovalRecord } from '../services/approvalService'
+import { fetchDepartments, fetchProtocols } from '../services/protocolService'
 import {
   createTask,
   deleteTask,
@@ -50,6 +51,16 @@ function sortEmployees(employees) {
     }
 
     return left.last_name.localeCompare(right.last_name)
+  })
+}
+
+function sortByOrderThenName(rows) {
+  return [...rows].sort((left, right) => {
+    if (left.sort_order !== right.sort_order) {
+      return left.sort_order - right.sort_order
+    }
+
+    return left.name.localeCompare(right.name)
   })
 }
 
@@ -121,12 +132,31 @@ function upsertRow(rows, row) {
   return nextRows
 }
 
+function toDateInputValue(date) {
+  return date.toISOString().slice(0, 10)
+}
+
+function defaultHistoryFromDate() {
+  const date = new Date()
+  date.setDate(date.getDate() - 30)
+  return toDateInputValue(date)
+}
+
 export function TeardownDataProvider({ children }) {
   const cachedBoard = loadCachedBoard()
   const [categories, setCategories] = useState(cachedBoard?.categories ?? [])
   const [tasks, setTasks] = useState(cachedBoard?.tasks ?? [])
   const [employees, setEmployees] = useState(cachedBoard?.employees ?? [])
+  const [departments, setDepartments] = useState(cachedBoard?.departments ?? [])
+  const [protocols, setProtocols] = useState(cachedBoard?.protocols ?? [])
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState(cachedBoard?.selectedDepartmentId ?? '')
+  const [selectedProtocolId, setSelectedProtocolId] = useState(cachedBoard?.selectedProtocolId ?? '')
   const [currentEmployeeId, setCurrentEmployeeId] = useState(loadCurrentEmployeeId())
+  const [historyFromDate, setHistoryFromDate] = useState(defaultHistoryFromDate)
+  const [historyToDate, setHistoryToDate] = useState(() => toDateInputValue(new Date()))
+  const [approvalHistory, setApprovalHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
   const [loading, setLoading] = useState(!cachedBoard)
   const [errorMessage, setErrorMessage] = useState('')
   const [syncMessage, setSyncMessage] = useState('')
@@ -145,10 +175,18 @@ export function TeardownDataProvider({ children }) {
       setErrorMessage('')
 
       try {
-        const [fetchedCategories, fetchedTasks, fetchedEmployees] = await Promise.all([
+        const [
+          fetchedCategories,
+          fetchedTasks,
+          fetchedEmployees,
+          fetchedDepartments,
+          fetchedProtocols,
+        ] = await Promise.all([
           fetchCategories(),
           fetchTasks(),
           fetchEmployees(),
+          fetchDepartments(),
+          fetchProtocols(),
         ])
 
         if (!isMounted) {
@@ -158,11 +196,31 @@ export function TeardownDataProvider({ children }) {
         const nextCategories = sortCategories(fetchedCategories)
         const nextTasks = sortTasks(fetchedTasks)
         const nextEmployees = sortEmployees(fetchedEmployees)
+        const nextDepartments = sortByOrderThenName(fetchedDepartments)
+        const nextProtocols = sortByOrderThenName(fetchedProtocols)
+        const nextDepartmentId =
+          selectedDepartmentId || nextDepartments[0]?.id || ''
+        const nextProtocolId =
+          selectedProtocolId ||
+          nextProtocols.find((protocol) => protocol.department_id === nextDepartmentId && protocol.active)?.id ||
+          ''
 
         setCategories(nextCategories)
         setTasks(nextTasks)
         setEmployees(nextEmployees)
-        saveCachedBoard({ categories: nextCategories, tasks: nextTasks, employees: nextEmployees })
+        setDepartments(nextDepartments)
+        setProtocols(nextProtocols)
+        setSelectedDepartmentId(nextDepartmentId)
+        setSelectedProtocolId(nextProtocolId)
+        saveCachedBoard({
+          categories: nextCategories,
+          tasks: nextTasks,
+          employees: nextEmployees,
+          departments: nextDepartments,
+          protocols: nextProtocols,
+          selectedDepartmentId: nextDepartmentId,
+          selectedProtocolId: nextProtocolId,
+        })
       } catch (error) {
         console.error('Failed to load teardown board from Supabase.', error)
 
@@ -186,8 +244,16 @@ export function TeardownDataProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    saveCachedBoard({ categories, tasks, employees })
-  }, [categories, tasks, employees])
+    saveCachedBoard({
+      categories,
+      tasks,
+      employees,
+      departments,
+      protocols,
+      selectedDepartmentId,
+      selectedProtocolId,
+    })
+  }, [categories, departments, employees, protocols, selectedDepartmentId, selectedProtocolId, tasks])
 
   useEffect(() => {
     const activeEmployees = employees.filter((employee) => employee.active)
@@ -201,6 +267,32 @@ export function TeardownDataProvider({ children }) {
     setCurrentEmployeeId(nextEmployeeId)
     saveCurrentEmployeeId(nextEmployeeId)
   }, [currentEmployeeId, employees])
+
+  useEffect(() => {
+    if (
+      selectedDepartmentId &&
+      departments.some((department) => department.id === selectedDepartmentId)
+    ) {
+      return
+    }
+
+    setSelectedDepartmentId(departments[0]?.id ?? '')
+  }, [departments, selectedDepartmentId])
+
+  useEffect(() => {
+    const departmentProtocols = protocols.filter(
+      (protocol) => protocol.department_id === selectedDepartmentId && protocol.active,
+    )
+
+    if (
+      selectedProtocolId &&
+      departmentProtocols.some((protocol) => protocol.id === selectedProtocolId)
+    ) {
+      return
+    }
+
+    setSelectedProtocolId(departmentProtocols[0]?.id ?? '')
+  }, [protocols, selectedDepartmentId, selectedProtocolId])
 
   useEffect(() => {
     if (!supabase) {
@@ -238,6 +330,26 @@ export function TeardownDataProvider({ children }) {
 
         setEmployees((current) => sortEmployees(upsertRow(current, row)))
       },
+      onDepartmentChange(payload) {
+        const row = payload.new ?? payload.old
+
+        if (payload.eventType === 'DELETE') {
+          setDepartments((current) => current.filter((item) => item.id !== row.id))
+          return
+        }
+
+        setDepartments((current) => sortByOrderThenName(upsertRow(current, row)))
+      },
+      onProtocolChange(payload) {
+        const row = payload.new ?? payload.old
+
+        if (payload.eventType === 'DELETE') {
+          setProtocols((current) => current.filter((item) => item.id !== row.id))
+          return
+        }
+
+        setProtocols((current) => sortByOrderThenName(upsertRow(current, row)))
+      },
     })
 
     return () => {
@@ -245,12 +357,70 @@ export function TeardownDataProvider({ children }) {
     }
   }, [])
 
+  const selectedDepartment =
+    departments.find((department) => department.id === selectedDepartmentId) ?? null
+  const selectedProtocol =
+    protocols.find((protocol) => protocol.id === selectedProtocolId) ?? null
+  const departmentProtocols = useMemo(
+    () => protocols.filter((protocol) => protocol.department_id === selectedDepartmentId && protocol.active),
+    [protocols, selectedDepartmentId],
+  )
+  const currentCategories = useMemo(
+    () => categories.filter((category) => !selectedProtocolId || category.protocol_id === selectedProtocolId),
+    [categories, selectedProtocolId],
+  )
+  const currentCategoryIds = useMemo(
+    () => new Set(currentCategories.map((category) => category.id)),
+    [currentCategories],
+  )
+  const currentTasks = useMemo(
+    () => tasks.filter((task) => currentCategoryIds.has(task.category_id)),
+    [currentCategoryIds, tasks],
+  )
   const tasksByStatus = useMemo(
-    () => buildTasksByStatus(categories, tasks, employees),
-    [categories, employees, tasks],
+    () => buildTasksByStatus(currentCategories, currentTasks, employees),
+    [currentCategories, currentTasks, employees],
   )
 
-  const areAllTasksDone = tasks.length > 0 && tasks.every((task) => task.done)
+  const areAllTasksDone = currentTasks.length > 0 && currentTasks.every((task) => task.done)
+
+  const loadApprovalHistory = async () => {
+    if (!selectedDepartmentId || !selectedProtocolId) {
+      setApprovalHistory([])
+      return
+    }
+
+    setHistoryLoading(true)
+    setHistoryError('')
+
+    try {
+      const historyRows = await fetchApprovalHistory({
+        fromDate: historyFromDate,
+        toDate: historyToDate,
+        departmentId: selectedDepartmentId,
+        protocolId: selectedProtocolId,
+      })
+      setApprovalHistory(historyRows)
+    } catch (error) {
+      console.error('approval_history_load_failed', {
+        reason: error?.message || 'Approval history could not be loaded.',
+        code: error?.code ?? null,
+        details: error?.details ?? null,
+        hint: error?.hint ?? null,
+        selectedDepartmentId,
+        selectedProtocolId,
+        historyFromDate,
+        historyToDate,
+      })
+      setHistoryError('Approval history could not be loaded.')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadApprovalHistory()
+  }, [selectedDepartmentId, selectedProtocolId, historyFromDate, historyToDate])
 
   const setTaskDone = async (taskId, done) => {
     const completedAt = done ? new Date().toISOString() : null
@@ -315,15 +485,19 @@ export function TeardownDataProvider({ children }) {
     if (!areAllTasksDone) {
       console.info('approve_shift_blocked', {
         reason: 'not_all_tasks_done',
-        totalTasks: tasks.length,
-        remainingTasks: tasks.filter((task) => !task.done).length,
+        departmentId: selectedDepartmentId || null,
+        protocolId: selectedProtocolId || null,
+        totalTasks: currentTasks.length,
+        remainingTasks: currentTasks.filter((task) => !task.done).length,
       })
       return
     }
 
     console.info('approve_shift_opened', {
-      totalTasks: tasks.length,
-      doneTasks: tasks.filter((task) => task.done).length,
+      departmentId: selectedDepartmentId || null,
+      protocolId: selectedProtocolId || null,
+      totalTasks: currentTasks.length,
+      doneTasks: currentTasks.filter((task) => task.done).length,
     })
     setApprovalMessage('Good, papi, good!')
     setApprovalStep('form')
@@ -347,7 +521,9 @@ export function TeardownDataProvider({ children }) {
     console.info('approval_submit_attempt', {
       employeeId: employeeId || null,
       employeeFound: Boolean(selectedEmployee),
-      totalTasks: tasks.length,
+      departmentId: selectedDepartmentId || null,
+      protocolId: selectedProtocolId || null,
+      totalTasks: currentTasks.length,
       allTasksDone: areAllTasksDone,
     })
 
@@ -360,24 +536,58 @@ export function TeardownDataProvider({ children }) {
       return false
     }
 
+    if (!selectedDepartmentId || !selectedProtocolId) {
+      setApprovalError('Choose a department and protocol before approving.')
+      console.info('approval_submit_blocked', {
+        reason: 'missing_department_or_protocol',
+        selectedDepartmentId: selectedDepartmentId || null,
+        selectedProtocolId: selectedProtocolId || null,
+      })
+      return false
+    }
+
     if (!areAllTasksDone) {
       setApprovalError('All tasks must be done before approval.')
       console.info('approval_submit_blocked', {
         reason: 'tasks_not_done',
-        remainingTasks: tasks.filter((task) => !task.done).length,
+        remainingTasks: currentTasks.filter((task) => !task.done).length,
       })
       return false
     }
 
     const approvedAt = new Date().toISOString()
+    const categoriesById = new Map(categories.map((category) => [category.id, category]))
+    const employeesById = new Map(employees.map((employee) => [employee.id, employee]))
+    const taskSnapshots = currentTasks.map((task) => {
+      const category = categoriesById.get(task.category_id)
+      const completedByEmployee = employeesById.get(task.completed_by)
+
+      return {
+        ...task,
+        category_name: category?.name ?? 'Uncategorized',
+        category_color: category?.color ?? '#ffd166',
+        completed_by_first_name: completedByEmployee?.first_name ?? null,
+        completed_by_last_name: completedByEmployee?.last_name ?? null,
+      }
+    })
     setIsApprovalSaving(true)
     setApprovalError('')
 
     try {
-      await createApprovalRecord(employeeId, approvedAt)
+      await createApprovalRecord({
+        employeeId,
+        departmentId: selectedDepartmentId,
+        protocolId: selectedProtocolId,
+        approvedAt,
+        taskSnapshots,
+      })
+      await loadApprovalHistory()
       console.info('approval_submit_succeeded', {
         employeeId,
+        departmentId: selectedDepartmentId,
+        protocolId: selectedProtocolId,
         approvedAt,
+        snapshotTasks: taskSnapshots.length,
       })
       setApprovalStep('celebration')
       return true
@@ -385,6 +595,8 @@ export function TeardownDataProvider({ children }) {
       const reason = error?.message || 'Approval could not be saved.'
       console.error('approval_submit_failed', {
         employeeId,
+        departmentId: selectedDepartmentId || null,
+        protocolId: selectedProtocolId || null,
         approvedAt,
         reason,
         code: error?.code ?? null,
@@ -392,7 +604,7 @@ export function TeardownDataProvider({ children }) {
         hint: error?.hint ?? null,
       })
       setApprovalError(
-        'Approval could not be saved. Confirm the `shift_approvals.employee_id` column and insert policy are set up in Supabase, then try again.',
+        'Approval could not be saved. Confirm the approval history tables and insert policies are set up in Supabase, then try again.',
       )
       return false
     } finally {
@@ -402,17 +614,23 @@ export function TeardownDataProvider({ children }) {
 
   const resetBoard = async () => {
     console.info('reset_board_attempt', {
-      totalTasks: tasks.length,
-      doneTasks: tasks.filter((task) => task.done).length,
+      departmentId: selectedDepartmentId || null,
+      protocolId: selectedProtocolId || null,
+      totalTasks: currentTasks.length,
+      doneTasks: currentTasks.filter((task) => task.done).length,
     })
 
     setIsBoardResetting(true)
     setSyncMessage('')
 
     try {
-      const resetTasks = await resetAllTasksDoneState()
-      setTasks(sortTasks(resetTasks))
+      const resetTasks = await resetAllTasksDoneState([...currentCategoryIds])
+      const resetTasksById = new Map(resetTasks.map((task) => [task.id, task]))
+      setTasks((current) =>
+        sortTasks(current.map((task) => resetTasksById.get(task.id) ?? task)),
+      )
       console.info('reset_board_succeeded', {
+        protocolId: selectedProtocolId || null,
         updatedTasks: resetTasks.length,
       })
       setIsApprovalOpen(false)
@@ -434,6 +652,7 @@ export function TeardownDataProvider({ children }) {
 
   const saveCategory = async (draft, categoryId) => {
     const payload = {
+      protocol_id: draft.protocol_id || selectedProtocolId,
       name: draft.name.trim(),
       color: draft.color.trim(),
       sort_order: Number(draft.sort_order),
@@ -511,10 +730,24 @@ export function TeardownDataProvider({ children }) {
 
   const value = {
     categories,
-    tasks,
-    employees,
+    currentCategories,
     currentEmployeeId,
+    currentTasks,
+    departmentProtocols,
+    departments,
+    employees,
+    selectedDepartment,
+    selectedDepartmentId,
+    selectedProtocol,
+    selectedProtocolId,
+    protocols,
+    tasks,
     tasksByStatus,
+    approvalHistory,
+    historyFromDate,
+    historyToDate,
+    historyLoading,
+    historyError,
     areAllTasksDone,
     loading,
     errorMessage,
@@ -532,6 +765,10 @@ export function TeardownDataProvider({ children }) {
     submitApproval,
     resetBoard,
     selectCurrentEmployee,
+    setSelectedDepartmentId,
+    setSelectedProtocolId,
+    setHistoryFromDate,
+    setHistoryToDate,
     saveCategory,
     removeCategory,
     saveTask,

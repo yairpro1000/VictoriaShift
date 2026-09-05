@@ -74,7 +74,7 @@ export async function deleteTask(taskId) {
   }
 }
 
-export async function resetAllTasksDoneState() {
+export async function resetAllTasksDoneState(categoryIds) {
   const supabase = requireSupabase()
   const { data, error } = await supabase
     .from('tasks')
@@ -83,7 +83,7 @@ export async function resetAllTasksDoneState() {
       completed_at: null,
       completed_by: null,
     })
-    .not('id', 'is', null)
+    .in('category_id', categoryIds)
     .select('*, completed_by_employee:employees!tasks_completed_by_fkey(id, first_name, last_name, active)')
 
   if (error) {
@@ -93,7 +93,13 @@ export async function resetAllTasksDoneState() {
   return data ?? []
 }
 
-export function subscribeToTaskChanges({ onCategoryChange, onTaskChange, onEmployeeChange }) {
+export function subscribeToTaskChanges({
+  onCategoryChange,
+  onTaskChange,
+  onEmployeeChange,
+  onDepartmentChange,
+  onProtocolChange,
+}) {
   const supabase = requireSupabase()
 
   return supabase
@@ -112,6 +118,16 @@ export function subscribeToTaskChanges({ onCategoryChange, onTaskChange, onEmplo
       'postgres_changes',
       { event: '*', schema: 'public', table: 'employees' },
       onEmployeeChange,
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'departments' },
+      onDepartmentChange,
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'protocols' },
+      onProtocolChange,
     )
     .subscribe()
 }
