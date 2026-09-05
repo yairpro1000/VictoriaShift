@@ -12,6 +12,7 @@ export function InstallPrompt() {
   const [isInstalled, setIsInstalled] = useState(false)
   const [isInstalling, setIsInstalling] = useState(false)
   const [installHint, setInstallHint] = useState('')
+  const [isCollapsed, setIsCollapsed] = useState(false)
 
   useEffect(() => {
     setIsInstalled(isStandaloneMode())
@@ -66,6 +67,21 @@ export function InstallPrompt() {
     return null
   }
 
+  if (isCollapsed) {
+    return (
+      <div className="install-prompt install-prompt--compact" role="region" aria-label="Install app">
+        <button
+          type="button"
+          className="install-prompt__button"
+          onClick={handleInstallClick}
+          disabled={isInstalling}
+        >
+          {isInstalling ? 'Opening…' : 'Install app'}
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="install-prompt" role="region" aria-label="Install app">
       <div>
@@ -82,6 +98,14 @@ export function InstallPrompt() {
         disabled={isInstalling}
       >
         {isInstalling ? 'Opening…' : 'Install app'}
+      </button>
+      <button
+        type="button"
+        className="install-prompt__close"
+        onClick={() => setIsCollapsed(true)}
+        aria-label="Shrink install prompt"
+      >
+        ×
       </button>
     </div>
   )

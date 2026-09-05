@@ -59,6 +59,15 @@ article {
   box-shadow: 0 10px 28px rgba(24, 32, 29, 0.2);
 }
 
+.install-prompt--compact {
+  justify-content: flex-end;
+  padding: 0.55rem 1rem;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+  pointer-events: none;
+}
+
 .install-prompt__eyebrow {
   margin: 0 0 0.2rem;
   font-size: 0.72rem;
@@ -90,6 +99,28 @@ article {
   color: #18201d;
   background: #f2b86d;
   box-shadow: 0 10px 20px rgba(242, 184, 109, 0.22);
+}
+
+.install-prompt--compact .install-prompt__button {
+  min-height: 2.5rem;
+  padding: 0.65rem 0.9rem;
+  pointer-events: auto;
+}
+
+.install-prompt__close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: #fffaf4;
+  background: rgba(255, 250, 244, 0.12);
 }
 
 .app-header {
@@ -128,6 +159,12 @@ article {
   margin: 0;
   font-size: clamp(2rem, 8vw, 3.2rem);
   line-height: 0.95;
+}
+
+.header-date {
+  margin: 0.55rem 0 0;
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .intro {
@@ -507,7 +544,8 @@ article {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .install-prompt__button:hover {
+  .install-prompt__button:hover,
+  .install-prompt__close:hover {
     transform: translateY(-1px);
   }
 
@@ -533,12 +571,22 @@ article {
 
 @media (max-width: 640px) {
   .install-prompt {
-    align-items: stretch;
-    flex-direction: column;
+    align-items: flex-start;
+    display: grid;
+    grid-template-columns: 1fr auto;
   }
 
   .install-prompt__button {
     width: 100%;
+  }
+
+  .install-prompt--compact {
+    display: flex;
+    align-items: center;
+  }
+
+  .install-prompt--compact .install-prompt__button {
+    width: auto;
   }
 
   .board-jump-button {

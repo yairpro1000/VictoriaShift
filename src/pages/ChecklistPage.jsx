@@ -4,6 +4,13 @@ import { Board } from '../components/Board'
 import { CelebrationModal } from '../components/CelebrationModal'
 import { useTeardownData } from '../hooks/useTeardownData.jsx'
 
+const todayLabel = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric',
+}).format(new Date())
+
 export function ChecklistPage() {
   const {
     tasksByStatus,
@@ -32,6 +39,7 @@ export function ChecklistPage() {
           <div>
             <p className="eyebrow">PASTA &amp; MORE</p>
             <h1>Shift Teardown</h1>
+            <p className="header-date">{todayLabel}</p>
           </div>
           <Link className="header-link" to="/manager">
             Manager
