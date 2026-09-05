@@ -552,8 +552,8 @@ article {
   align-items: center;
   gap: 1rem;
   overflow: hidden;
-  min-height: 4.7rem;
-  padding: 0.95rem 1rem;
+  min-height: 5.15rem;
+  padding: 0.85rem 1rem;
   border: 0;
   border-radius: 1rem;
   background:
@@ -607,8 +607,8 @@ article {
   position: relative;
   z-index: 1;
   display: grid;
-  width: 3.35rem;
-  min-height: 3.35rem;
+  width: 4.25rem;
+  min-height: 4.25rem;
   place-items: center;
   flex: 0 0 auto;
   color: rgba(24, 32, 29, 0.92);
@@ -616,8 +616,8 @@ article {
 }
 
 .task-card__icon svg {
-  width: 3.15rem;
-  height: 3.15rem;
+  width: 4.05rem;
+  height: 4.05rem;
   fill: currentColor;
 }
 
