@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'victoria-shift-board-cache'
+const CURRENT_EMPLOYEE_KEY = 'victoria-shift-current-employee-id'
 
 export function loadCachedBoard() {
   if (typeof window === 'undefined') {
@@ -24,4 +25,25 @@ export function saveCachedBoard(board) {
   }
 
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(board))
+}
+
+export function loadCurrentEmployeeId() {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+
+  return window.localStorage.getItem(CURRENT_EMPLOYEE_KEY) ?? ''
+}
+
+export function saveCurrentEmployeeId(employeeId) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (!employeeId) {
+    window.localStorage.removeItem(CURRENT_EMPLOYEE_KEY)
+    return
+  }
+
+  window.localStorage.setItem(CURRENT_EMPLOYEE_KEY, employeeId)
 }

@@ -16,6 +16,13 @@ const EMPTY_TASK = {
   sort_order: '',
   done: false,
   completed_at: null,
+  completed_by: null,
+}
+
+const EMPTY_EMPLOYEE = {
+  first_name: '',
+  last_name: '',
+  active: true,
 }
 
 const MANAGER_PASSWORD = 'papi3823'
@@ -42,6 +49,7 @@ function groupTasksByCategory(categories, tasks) {
 export function ManagerPage() {
   const {
     categories,
+    employees,
     tasks,
     loading,
     errorMessage,
@@ -49,7 +57,12 @@ export function ManagerPage() {
     removeCategory,
     saveTask,
     removeTask,
+    saveEmployee,
+    removeEmployee,
   } = useTeardownData()
+  const [employeeDraft, setEmployeeDraft] = useState(EMPTY_EMPLOYEE)
+  const [editingEmployeeId, setEditingEmployeeId] = useState(null)
+  const [employeeStatus, setEmployeeStatus] = useState('')
   const [categoryDraft, setCategoryDraft] = useState(EMPTY_CATEGORY)
   const [editingCategoryId, setEditingCategoryId] = useState(null)
   const [categoryStatus, setCategoryStatus] = useState('')
@@ -74,6 +87,20 @@ export function ManagerPage() {
     [orderedCategories, tasks],
   )
 
+  const orderedEmployees = useMemo(
+    () =>
+      [...employees].sort((left, right) => {
+        const firstNameCompare = left.first_name.localeCompare(right.first_name)
+
+        if (firstNameCompare !== 0) {
+          return firstNameCompare
+        }
+
+        return left.last_name.localeCompare(right.last_name)
+      }),
+    [employees],
+  )
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return
@@ -85,6 +112,11 @@ export function ManagerPage() {
   const resetCategoryForm = () => {
     setCategoryDraft(EMPTY_CATEGORY)
     setEditingCategoryId(null)
+  }
+
+  const resetEmployeeForm = () => {
+    setEmployeeDraft(EMPTY_EMPLOYEE)
+    setEditingEmployeeId(null)
   }
 
   const resetTaskForm = () => {
@@ -178,6 +210,29 @@ export function ManagerPage() {
     await submitCategoryDraft()
   }
 
+  const submitEmployeeDraft = async (employeeId = null) => {
+    if (!employeeDraft.first_name.trim() || !employeeDraft.last_name.trim()) {
+      setEmployeeStatus('First and last name are required.')
+      return false
+    }
+
+    try {
+      await saveEmployee(employeeDraft, employeeId)
+      setEmployeeStatus(employeeId ? 'Employee updated.' : 'Employee created.')
+      resetEmployeeForm()
+      return true
+    } catch (error) {
+      console.error('Failed to save employee.', error)
+      setEmployeeStatus(error.message || 'Failed to save employee.')
+      return false
+    }
+  }
+
+  const handleEmployeeSubmit = async (event) => {
+    event.preventDefault()
+    await submitEmployeeDraft()
+  }
+
   const handleTaskSubmit = async (event) => {
     event.preventDefault()
 
@@ -229,6 +284,16 @@ export function ManagerPage() {
       sort_order: String(task.sort_order),
       done: task.done,
       completed_at: task.completed_at,
+      completed_by: task.completed_by,
+    })
+  }
+
+  const startEmployeeEdit = (employee) => {
+    setEditingEmployeeId(employee.id)
+    setEmployeeDraft({
+      first_name: employee.first_name,
+      last_name: employee.last_name,
+      active: employee.active,
     })
   }
 
@@ -319,6 +384,30 @@ export function ManagerPage() {
     })
   }
 
+  const confirmDeleteEmployee = (employee) => {
+    openConfirmDialog({
+      title: 'Delete employee?',
+      message: `Are you sure you want to delete employee "${employee.first_name} ${employee.last_name}"? Existing completed tasks will keep their timestamp but lose the employee link.`,
+      confirmLabel: 'Delete employee',
+      onConfirm: async () => {
+        try {
+          await removeEmployee(employee.id)
+          setEmployeeStatus('Employee deleted.')
+          if (editingEmployeeId === employee.id) {
+            resetEmployeeForm()
+          }
+        } catch (error) {
+          console.error('Failed to delete employee.', error)
+          openNoticeDialog({
+            title: 'Employee could not be deleted',
+            message: error.message || 'Failed to delete employee.',
+            tone: 'warning',
+          })
+        }
+      },
+    })
+  }
+
   return (
     <div className="manager-shell">
       {!isUnlocked ? (
@@ -367,6 +456,147 @@ export function ManagerPage() {
       </header>
 
       <main className={`manager-grid${!isUnlocked ? ' manager-grid--locked' : ''}`} aria-hidden={!isUnlocked}>
+        <section className="manager-panel">
+          <div className="manager-panel__header">
+            <h2>Employees</h2>
+            <button className="secondary-button" type="button" onClick={resetEmployeeForm}>
+              + Add employee
+            </button>
+          </div>
+
+          {!editingEmployeeId ? (
+            <form className="manager-form" onSubmit={handleEmployeeSubmit}>
+              <label>
+                First name
+                <input
+                  type="text"
+                  value={employeeDraft.first_name}
+                  onChange={(event) =>
+                    setEmployeeDraft((current) => ({ ...current, first_name: event.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label>
+                Last name
+                <input
+                  type="text"
+                  value={employeeDraft.last_name}
+                  onChange={(event) =>
+                    setEmployeeDraft((current) => ({ ...current, last_name: event.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={employeeDraft.active}
+                  onChange={(event) =>
+                    setEmployeeDraft((current) => ({ ...current, active: event.target.checked }))
+                  }
+                />
+                Active
+              </label>
+              <div className="manager-form__actions">
+                <button className="primary-button" type="submit">
+                  Create employee
+                </button>
+              </div>
+              {employeeStatus ? <p className="manager-status">{employeeStatus}</p> : null}
+            </form>
+          ) : (
+            employeeStatus ? <p className="manager-status">{employeeStatus}</p> : null
+          )}
+
+          <div className="manager-list">
+            {orderedEmployees.map((employee) => (
+              <article
+                key={employee.id}
+                className={`manager-item${editingEmployeeId === employee.id ? ' manager-item--editing' : ''}`}
+              >
+                <div>
+                  <p className="manager-item__title">
+                    {employee.first_name} {employee.last_name}
+                  </p>
+                  <p className="manager-item__meta">{employee.active ? 'Active' : 'Inactive'}</p>
+                </div>
+
+                {editingEmployeeId === employee.id ? (
+                  <div className="manager-item__editor">
+                    <label>
+                      First name
+                      <input
+                        type="text"
+                        value={employeeDraft.first_name}
+                        onChange={(event) =>
+                          setEmployeeDraft((current) => ({ ...current, first_name: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Last name
+                      <input
+                        type="text"
+                        value={employeeDraft.last_name}
+                        onChange={(event) =>
+                          setEmployeeDraft((current) => ({ ...current, last_name: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label className="checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={employeeDraft.active}
+                        onChange={(event) =>
+                          setEmployeeDraft((current) => ({ ...current, active: event.target.checked }))
+                        }
+                      />
+                      Active
+                    </label>
+                    <div className="manager-item__actions">
+                      <button
+                        className="primary-button"
+                        type="button"
+                        onClick={() => submitEmployeeDraft(employee.id)}
+                      >
+                        Save employee
+                      </button>
+                      <button className="secondary-button" type="button" onClick={resetEmployeeForm}>
+                        Cancel
+                      </button>
+                      <button
+                        className="danger-button"
+                        type="button"
+                        onClick={() => confirmDeleteEmployee(employee)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="manager-item__actions">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => startEmployeeEdit(employee)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="danger-button"
+                      type="button"
+                      onClick={() => confirmDeleteEmployee(employee)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="manager-panel">
           <div className="manager-panel__header">
             <h2>Categories</h2>

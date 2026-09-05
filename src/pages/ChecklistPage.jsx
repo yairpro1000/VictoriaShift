@@ -13,6 +13,8 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
 
 export function ChecklistPage() {
   const {
+    employees,
+    currentEmployeeId,
     tasksByStatus,
     toggleTask,
     setTaskDone,
@@ -30,7 +32,9 @@ export function ChecklistPage() {
     loading,
     errorMessage,
     syncMessage,
+    selectCurrentEmployee,
   } = useTeardownData()
+  const activeEmployees = employees.filter((employee) => employee.active)
 
   return (
     <div className="app-shell">
@@ -50,6 +54,23 @@ export function ChecklistPage() {
         {syncMessage ? <p className="status-banner status-banner--muted">{syncMessage}</p> : null}
       </header>
 
+      <div className="employee-picker" role="region" aria-label="Current employee">
+        <label>
+          Current employee
+          <select
+            value={currentEmployeeId}
+            onChange={(event) => selectCurrentEmployee(event.target.value)}
+          >
+            <option value="">Who are you?</option>
+            {activeEmployees.map((employee) => (
+              <option key={employee.id} value={employee.id}>
+                {employee.first_name} {employee.last_name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       <Board
         tasksByStatus={tasksByStatus}
         onToggleTask={toggleTask}
@@ -63,9 +84,11 @@ export function ChecklistPage() {
         step={approvalStep}
         message={approvalMessage}
         errorMessage={approvalError}
+        employees={activeEmployees}
+        currentEmployeeId={currentEmployeeId}
         isSaving={isApprovalSaving}
         isResetting={isBoardResetting}
-        onSubmitName={submitApproval}
+        onSubmitEmployee={submitApproval}
         onClose={dismissApproval}
         onResetBoard={resetBoard}
       />

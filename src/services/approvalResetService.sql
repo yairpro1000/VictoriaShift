@@ -1,6 +1,6 @@
 create table if not exists public.shift_approvals (
   id bigint generated always as identity primary key,
-  name text not null check (char_length(trim(name)) > 0),
+  employee_id uuid not null references public.employees(id) on delete restrict,
   approved_at timestamptz not null default timezone('utc', now())
 );
 
@@ -11,4 +11,4 @@ create policy "Allow public insert shift approvals"
 on public.shift_approvals
 for insert
 to anon, authenticated
-with check (char_length(trim(name)) > 0);
+with check (employee_id is not null);

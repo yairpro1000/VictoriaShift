@@ -4,7 +4,7 @@ export async function fetchTasks() {
   const supabase = requireSupabase()
   const { data, error } = await supabase
     .from('tasks')
-    .select('*')
+    .select('*, completed_by_employee:employees!tasks_completed_by_fkey(id, first_name, last_name, active)')
     .order('sort_order', { ascending: true })
 
   if (error) {
@@ -14,16 +14,17 @@ export async function fetchTasks() {
   return data ?? []
 }
 
-export async function updateTaskDoneState(taskId, done, completedAt) {
+export async function updateTaskDoneState(taskId, done, completedAt, completedBy) {
   const supabase = requireSupabase()
   const { data, error } = await supabase
     .from('tasks')
     .update({
       done,
       completed_at: completedAt,
+      completed_by: completedBy,
     })
     .eq('id', taskId)
-    .select()
+    .select('*, completed_by_employee:employees!tasks_completed_by_fkey(id, first_name, last_name, active)')
     .single()
 
   if (error) {
@@ -80,9 +81,10 @@ export async function resetAllTasksDoneState() {
     .update({
       done: false,
       completed_at: null,
+      completed_by: null,
     })
     .not('id', 'is', null)
-    .select()
+    .select('*, completed_by_employee:employees!tasks_completed_by_fkey(id, first_name, last_name, active)')
 
   if (error) {
     throw error
@@ -91,7 +93,7 @@ export async function resetAllTasksDoneState() {
   return data ?? []
 }
 
-export function subscribeToTaskChanges({ onCategoryChange, onTaskChange }) {
+export function subscribeToTaskChanges({ onCategoryChange, onTaskChange, onEmployeeChange }) {
   const supabase = requireSupabase()
 
   return supabase
@@ -105,6 +107,11 @@ export function subscribeToTaskChanges({ onCategoryChange, onTaskChange }) {
       'postgres_changes',
       { event: '*', schema: 'public', table: 'tasks' },
       onTaskChange,
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'employees' },
+      onEmployeeChange,
     )
     .subscribe()
 }

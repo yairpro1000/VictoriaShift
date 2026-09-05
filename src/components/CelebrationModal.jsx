@@ -15,19 +15,23 @@ export function CelebrationModal({
   step,
   message,
   errorMessage,
+  employees,
+  currentEmployeeId,
   isSaving,
   isResetting,
-  onSubmitName,
+  onSubmitEmployee,
   onClose,
   onResetBoard,
 }) {
-  const [name, setName] = useState('')
+  const [approvalEmployeeId, setApprovalEmployeeId] = useState('')
 
   useEffect(() => {
     if (!isOpen) {
-      setName('')
+      setApprovalEmployeeId('')
       return undefined
     }
+
+    setApprovalEmployeeId(currentEmployeeId)
 
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
@@ -40,7 +44,7 @@ export function CelebrationModal({
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isOpen, onClose])
+  }, [currentEmployeeId, isOpen, onClose])
 
   if (!isOpen) {
     return null
@@ -48,10 +52,10 @@ export function CelebrationModal({
 
   const handleSubmit = async (event) => {
     event.preventDefault()
-    const didSave = await onSubmitName(name)
+    const didSave = await onSubmitEmployee(approvalEmployeeId)
 
     if (didSave) {
-      setName('')
+      setApprovalEmployeeId('')
     }
   }
 
@@ -110,16 +114,21 @@ export function CelebrationModal({
             <h2 id="approval-title">Who is approving this shift?</h2>
             <form className="celebration-modal__form" onSubmit={handleSubmit}>
               <label>
-                Name
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Enter name"
+                Employee
+                <select
+                  value={approvalEmployeeId}
+                  onChange={(event) => setApprovalEmployeeId(event.target.value)}
                   autoFocus
                   disabled={isSaving}
                   required
-                />
+                >
+                  <option value="">Who are you?</option>
+                  {employees.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.first_name} {employee.last_name}
+                    </option>
+                  ))}
+                </select>
               </label>
               {errorMessage ? <p className="celebration-modal__error">{errorMessage}</p> : null}
               <div className="celebration-modal__actions">

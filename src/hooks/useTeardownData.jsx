@@ -6,6 +6,7 @@ import {
   useState,
 } from 'react'
 import { fetchCategories, createCategory, updateCategory, deleteCategory } from '../services/categoryService'
+import { createEmployee, deleteEmployee, fetchEmployees, updateEmployee } from '../services/employeeService'
 import { createApprovalRecord } from '../services/approvalService'
 import {
   createTask,
@@ -16,7 +17,12 @@ import {
   updateTask,
   updateTaskDoneState,
 } from '../services/taskService'
-import { loadCachedBoard, saveCachedBoard } from '../services/storageService'
+import {
+  loadCachedBoard,
+  loadCurrentEmployeeId,
+  saveCachedBoard,
+  saveCurrentEmployeeId,
+} from '../services/storageService'
 import { supabase } from '../services/supabaseClient'
 
 const TeardownDataContext = createContext(null)
@@ -35,13 +41,36 @@ function sortTasks(tasks) {
   })
 }
 
-function buildTasksByStatus(categories, tasks) {
+function sortEmployees(employees) {
+  return [...employees].sort((left, right) => {
+    const firstNameCompare = left.first_name.localeCompare(right.first_name)
+
+    if (firstNameCompare !== 0) {
+      return firstNameCompare
+    }
+
+    return left.last_name.localeCompare(right.last_name)
+  })
+}
+
+function attachEmployee(task, employeesById) {
+  return {
+    ...task,
+    completed_by_employee:
+      task.completed_by_employee ?? employeesById.get(task.completed_by) ?? null,
+  }
+}
+
+function buildTasksByStatus(categories, tasks, employees) {
+  const employeesById = new Map(employees.map((employee) => [employee.id, employee]))
+
   const todoCategories = []
   const doneCategories = []
 
   sortCategories(categories).forEach((category) => {
     const categoryTasks = tasks
       .filter((task) => task.category_id === category.id)
+      .map((task) => attachEmployee(task, employeesById))
       .sort((left, right) => left.sort_order - right.sort_order)
 
     const todoTasks = categoryTasks.filter((task) => !task.done)
@@ -96,6 +125,8 @@ export function TeardownDataProvider({ children }) {
   const cachedBoard = loadCachedBoard()
   const [categories, setCategories] = useState(cachedBoard?.categories ?? [])
   const [tasks, setTasks] = useState(cachedBoard?.tasks ?? [])
+  const [employees, setEmployees] = useState(cachedBoard?.employees ?? [])
+  const [currentEmployeeId, setCurrentEmployeeId] = useState(loadCurrentEmployeeId())
   const [loading, setLoading] = useState(!cachedBoard)
   const [errorMessage, setErrorMessage] = useState('')
   const [syncMessage, setSyncMessage] = useState('')
@@ -114,9 +145,10 @@ export function TeardownDataProvider({ children }) {
       setErrorMessage('')
 
       try {
-        const [fetchedCategories, fetchedTasks] = await Promise.all([
+        const [fetchedCategories, fetchedTasks, fetchedEmployees] = await Promise.all([
           fetchCategories(),
           fetchTasks(),
+          fetchEmployees(),
         ])
 
         if (!isMounted) {
@@ -125,10 +157,12 @@ export function TeardownDataProvider({ children }) {
 
         const nextCategories = sortCategories(fetchedCategories)
         const nextTasks = sortTasks(fetchedTasks)
+        const nextEmployees = sortEmployees(fetchedEmployees)
 
         setCategories(nextCategories)
         setTasks(nextTasks)
-        saveCachedBoard({ categories: nextCategories, tasks: nextTasks })
+        setEmployees(nextEmployees)
+        saveCachedBoard({ categories: nextCategories, tasks: nextTasks, employees: nextEmployees })
       } catch (error) {
         console.error('Failed to load teardown board from Supabase.', error)
 
@@ -152,8 +186,21 @@ export function TeardownDataProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    saveCachedBoard({ categories, tasks })
-  }, [categories, tasks])
+    saveCachedBoard({ categories, tasks, employees })
+  }, [categories, tasks, employees])
+
+  useEffect(() => {
+    const activeEmployees = employees.filter((employee) => employee.active)
+
+    if (activeEmployees.some((employee) => employee.id === currentEmployeeId)) {
+      saveCurrentEmployeeId(currentEmployeeId)
+      return
+    }
+
+    const nextEmployeeId = activeEmployees[0]?.id ?? ''
+    setCurrentEmployeeId(nextEmployeeId)
+    saveCurrentEmployeeId(nextEmployeeId)
+  }, [currentEmployeeId, employees])
 
   useEffect(() => {
     if (!supabase) {
@@ -181,6 +228,16 @@ export function TeardownDataProvider({ children }) {
 
         setTasks((current) => sortTasks(upsertRow(current, row)))
       },
+      onEmployeeChange(payload) {
+        const row = payload.new ?? payload.old
+
+        if (payload.eventType === 'DELETE') {
+          setEmployees((current) => current.filter((item) => item.id !== row.id))
+          return
+        }
+
+        setEmployees((current) => sortEmployees(upsertRow(current, row)))
+      },
     })
 
     return () => {
@@ -189,18 +246,39 @@ export function TeardownDataProvider({ children }) {
   }, [])
 
   const tasksByStatus = useMemo(
-    () => buildTasksByStatus(categories, tasks),
-    [categories, tasks],
+    () => buildTasksByStatus(categories, tasks, employees),
+    [categories, employees, tasks],
   )
 
   const areAllTasksDone = tasks.length > 0 && tasks.every((task) => task.done)
 
   const setTaskDone = async (taskId, done) => {
     const completedAt = done ? new Date().toISOString() : null
+    const completedBy = done ? currentEmployeeId : null
+    const completedByEmployee =
+      employees.find((employee) => employee.id === completedBy) ?? null
+
+    if (done && !completedBy) {
+      console.info('task_done_blocked', {
+        taskId,
+        reason: 'missing_current_employee',
+        activeEmployees: employees.filter((employee) => employee.active).length,
+      })
+      setSyncMessage('Choose a current employee before marking tasks done.')
+      return
+    }
 
     setTasks((current) =>
       current.map((task) =>
-        task.id === taskId ? { ...task, done, completed_at: completedAt } : task,
+        task.id === taskId
+          ? {
+              ...task,
+              done,
+              completed_at: completedAt,
+              completed_by: completedBy,
+              completed_by_employee: completedByEmployee,
+            }
+          : task,
       ),
     )
     setApprovalMessage('')
@@ -210,12 +288,13 @@ export function TeardownDataProvider({ children }) {
     setSyncMessage('')
 
     try {
-      const updatedTask = await updateTaskDoneState(taskId, done, completedAt)
+      const updatedTask = await updateTaskDoneState(taskId, done, completedAt, completedBy)
       setTasks((current) => sortTasks(upsertRow(current, updatedTask)))
     } catch (error) {
       console.error('Failed to sync task state to Supabase.', {
         taskId,
         done,
+        completedBy,
         error,
       })
       setSyncMessage('Last change is pending sync.')
@@ -262,19 +341,21 @@ export function TeardownDataProvider({ children }) {
     setApprovalError('')
   }
 
-  const submitApproval = async (name) => {
-    const trimmedName = name.trim()
+  const submitApproval = async (employeeId) => {
+    const selectedEmployee = employees.find((employee) => employee.id === employeeId) ?? null
 
     console.info('approval_submit_attempt', {
-      hasName: Boolean(trimmedName),
+      employeeId: employeeId || null,
+      employeeFound: Boolean(selectedEmployee),
       totalTasks: tasks.length,
       allTasksDone: areAllTasksDone,
     })
 
-    if (!trimmedName) {
-      setApprovalError('Enter a name before approving.')
+    if (!employeeId || !selectedEmployee) {
+      setApprovalError('Choose an employee before approving.')
       console.info('approval_submit_blocked', {
-        reason: 'missing_name',
+        reason: 'missing_employee',
+        employeeId: employeeId || null,
       })
       return false
     }
@@ -293,9 +374,9 @@ export function TeardownDataProvider({ children }) {
     setApprovalError('')
 
     try {
-      await createApprovalRecord(trimmedName, approvedAt)
+      await createApprovalRecord(employeeId, approvedAt)
       console.info('approval_submit_succeeded', {
-        name: trimmedName,
+        employeeId,
         approvedAt,
       })
       setApprovalStep('celebration')
@@ -303,7 +384,7 @@ export function TeardownDataProvider({ children }) {
     } catch (error) {
       const reason = error?.message || 'Approval could not be saved.'
       console.error('approval_submit_failed', {
-        name: trimmedName,
+        employeeId,
         approvedAt,
         reason,
         code: error?.code ?? null,
@@ -311,7 +392,7 @@ export function TeardownDataProvider({ children }) {
         hint: error?.hint ?? null,
       })
       setApprovalError(
-        'Approval could not be saved. Confirm the `shift_approvals` table and insert policy are set up in Supabase, then try again.',
+        'Approval could not be saved. Confirm the `shift_approvals.employee_id` column and insert policy are set up in Supabase, then try again.',
       )
       return false
     } finally {
@@ -383,6 +464,7 @@ export function TeardownDataProvider({ children }) {
       sort_order: Number(draft.sort_order),
       done: Boolean(draft.done),
       completed_at: draft.done ? draft.completed_at ?? new Date().toISOString() : null,
+      completed_by: draft.done ? draft.completed_by ?? null : null,
     }
 
     const savedTask = taskId
@@ -398,9 +480,40 @@ export function TeardownDataProvider({ children }) {
     setTasks((current) => current.filter((task) => task.id !== taskId))
   }
 
+  const selectCurrentEmployee = (employeeId) => {
+    setCurrentEmployeeId(employeeId)
+    saveCurrentEmployeeId(employeeId)
+  }
+
+  const saveEmployee = async (draft, employeeId) => {
+    const payload = {
+      first_name: draft.first_name.trim(),
+      last_name: draft.last_name.trim(),
+      active: Boolean(draft.active),
+    }
+
+    const savedEmployee = employeeId
+      ? await updateEmployee(employeeId, payload)
+      : await createEmployee(payload)
+
+    setEmployees((current) => sortEmployees(upsertRow(current, savedEmployee)))
+    return savedEmployee
+  }
+
+  const removeEmployee = async (employeeId) => {
+    await deleteEmployee(employeeId)
+    setEmployees((current) => current.filter((employee) => employee.id !== employeeId))
+
+    if (currentEmployeeId === employeeId) {
+      selectCurrentEmployee('')
+    }
+  }
+
   const value = {
     categories,
     tasks,
+    employees,
+    currentEmployeeId,
     tasksByStatus,
     areAllTasksDone,
     loading,
@@ -418,10 +531,13 @@ export function TeardownDataProvider({ children }) {
     dismissApproval,
     submitApproval,
     resetBoard,
+    selectCurrentEmployee,
     saveCategory,
     removeCategory,
     saveTask,
     removeTask,
+    saveEmployee,
+    removeEmployee,
   }
 
   return (
