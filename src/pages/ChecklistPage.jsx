@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import { ApproveFooter } from '../components/ApproveFooter'
+import { ProtocolPicker } from '../components/ProtocolPicker'
 import { Board } from '../components/Board'
 import { CelebrationModal } from '../components/CelebrationModal'
 import { useTeardownData } from '../hooks/useTeardownData.jsx'
@@ -126,7 +127,6 @@ export function ChecklistPage() {
   const activeEmployees = employees.filter((employee) => employee.active)
   const [activeTab, setActiveTab] = useState('current')
   const [expandedApprovalId, setExpandedApprovalId] = useState(null)
-  const [isProtocolPickerOpen, setIsProtocolPickerOpen] = useState(false)
   const [selectedHistoryCategoryId, setSelectedHistoryCategoryId] = useState('')
   const historyCategoryOptions = useMemo(
     () => [...currentCategories].sort((left, right) => left.sort_order - right.sort_order),
@@ -171,33 +171,12 @@ export function ChecklistPage() {
                 </button>
               ))}
             </div>
-            <div className="protocol-heading">
-              <h1>{selectedProtocol?.name ?? 'Select protocol'}</h1>
-              <button
-                type="button"
-                className="protocol-change-button"
-                onClick={() => setIsProtocolPickerOpen((current) => !current)}
-                aria-label="Change protocol"
-              >
-                ✎
-              </button>
-            </div>
-            {isProtocolPickerOpen ? (
-              <select
-                className="protocol-select"
-                value={selectedProtocolId}
-                onChange={(event) => {
-                  setSelectedProtocolId(event.target.value)
-                  setIsProtocolPickerOpen(false)
-                }}
-              >
-                {departmentProtocols.map((protocol) => (
-                  <option key={protocol.id} value={protocol.id}>
-                    {protocol.name}
-                  </option>
-                ))}
-              </select>
-            ) : null}
+            <ProtocolPicker
+              selectedProtocol={selectedProtocol}
+              selectedProtocolId={selectedProtocolId}
+              protocols={departmentProtocols}
+              onSelect={setSelectedProtocolId}
+            />
             <p className="header-date">{todayLabel}</p>
           </div>
           <Link className="header-link" to="/manager">

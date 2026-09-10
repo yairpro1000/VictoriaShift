@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import { useTeardownData } from '../hooks/useTeardownData.jsx'
+import { NamedEntityManager } from '../components/NamedEntityManager'
+import { ProtocolPicker } from '../components/ProtocolPicker'
 import { TaskCard } from '../components/TaskCard'
 
 const EMPTY_CATEGORY = {
@@ -48,9 +50,21 @@ function groupTasksByCategory(categories, tasks) {
 
 export function ManagerPage() {
   const {
-    categories,
+    currentCategories: categories,
+    departmentProtocols,
+    departments,
+    selectedDepartmentId,
+    selectedProtocol,
+    selectedProtocolId,
+    setSelectedDepartmentId,
+    setSelectedProtocolId,
+    saveProtocol,
+    saveDepartment,
+    removeDepartment,
+    removeProtocol,
+    protocols,
     employees,
-    tasks,
+    currentTasks: tasks,
     loading,
     errorMessage,
     saveCategory,
@@ -60,6 +74,7 @@ export function ManagerPage() {
     saveEmployee,
     removeEmployee,
   } = useTeardownData()
+  const [activeTab, setActiveTab] = useState('employees')
   const [employeeDraft, setEmployeeDraft] = useState(EMPTY_EMPLOYEE)
   const [editingEmployeeId, setEditingEmployeeId] = useState(null)
   const [employeeStatus, setEmployeeStatus] = useState('')
@@ -136,6 +151,16 @@ export function ManagerPage() {
       }))
     }
   }, [newTaskDraft.category_id, orderedCategories])
+
+  useEffect(() => {
+    setCategoryDraft(EMPTY_CATEGORY)
+    setEditingCategoryId(null)
+    setCategoryStatus('')
+    setNewTaskDraft(EMPTY_TASK)
+    setEditingTaskDraft(EMPTY_TASK)
+    setEditingTaskId(null)
+    setTaskStatus('')
+  }, [selectedProtocolId, selectedDepartmentId])
 
   const closeDialog = () => {
     if (isDialogBusy) {
@@ -441,7 +466,19 @@ export function ManagerPage() {
       <header className="manager-header">
         <div className="app-header__row">
           <div>
-            <p className="eyebrow">Internal Tools</p>
+            <div className="department-tabs" role="tablist" aria-label="Departments">
+              {departments.map((department) => (
+                <button
+                  key={department.id}
+                  type="button"
+                  className={`department-tab${department.id === selectedDepartmentId ? ' department-tab--active' : ''}`}
+                  onClick={() => setSelectedDepartmentId(department.id)}
+                  disabled={!isUnlocked}
+                >
+                  {department.name}
+                </button>
+              ))}
+            </div>
             <h1>Manager</h1>
           </div>
           <Link className="header-link" to="/">
@@ -449,13 +486,39 @@ export function ManagerPage() {
           </Link>
         </div>
         <p className="intro">
-          Update categories and tasks directly in Supabase. This route is not secure by URL alone.
+          Manage employees and shift protocols.
         </p>
         {loading ? <p className="status-banner">Loading manager data…</p> : null}
         {errorMessage ? <p className="status-banner status-banner--warning">{errorMessage}</p> : null}
       </header>
 
-      <main className={`manager-grid${!isUnlocked ? ' manager-grid--locked' : ''}`} aria-hidden={!isUnlocked}>
+      <main className={`manager-grid${!isUnlocked ? ' manager-grid--locked' : ''}`} aria-hidden={!isUnlocked} inert={!isUnlocked}>
+        <div className="view-tabs" role="tablist" aria-label="Manager views">
+          {['employees', 'protocols'].map((tab, index) => (
+            <button
+              key={tab}
+              id={`manager-tab-${tab}`}
+              role="tab"
+              type="button"
+              className={`view-tab${activeTab === tab ? ' view-tab--active' : ''}`}
+              aria-selected={activeTab === tab}
+              aria-controls={`manager-panel-${tab}`}
+              tabIndex={activeTab === tab ? 0 : -1}
+              onClick={() => setActiveTab(tab)}
+              onKeyDown={(event) => {
+                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+                event.preventDefault()
+                const nextTab = event.key === 'Home' ? 'employees'
+                  : event.key === 'End' ? 'protocols' : ['employees', 'protocols'][1 - index]
+                setActiveTab(nextTab)
+                document.getElementById(`manager-tab-${nextTab}`)?.focus()
+              }}
+            >
+              {tab === 'employees' ? 'Employees' : 'Protocols'}
+            </button>
+          ))}
+        </div>
+        <div id="manager-panel-employees" role="tabpanel" aria-labelledby="manager-tab-employees" hidden={activeTab !== 'employees'}>
         <section className="manager-panel">
           <div className="manager-panel__header">
             <h2>Employees</h2>
@@ -597,6 +660,37 @@ export function ManagerPage() {
           </div>
         </section>
 
+        </div>
+        <div id="manager-panel-protocols" role="tabpanel" aria-labelledby="manager-tab-protocols" hidden={activeTab !== 'protocols'}>
+          <div className="manager-entity-panels">
+            <NamedEntityManager
+              title="Departments"
+              entityName="Department"
+              rows={departments}
+              onSave={saveDepartment}
+              onDelete={removeDepartment}
+            />
+            <NamedEntityManager
+              key={selectedDepartmentId}
+              title="Protocols"
+              entityName="Protocol"
+              rows={protocols.filter((protocol) => protocol.department_id === selectedDepartmentId)}
+              onSave={(draft, id) => saveProtocol({ ...draft, department_id: selectedDepartmentId }, id)}
+              onDelete={removeProtocol}
+              disabled={!selectedDepartmentId}
+            />
+          </div>
+          <section className="manager-panel manager-protocol">
+            <ProtocolPicker
+              key={selectedDepartmentId}
+              selectedProtocol={selectedProtocol}
+              selectedProtocolId={selectedProtocolId}
+              protocols={departmentProtocols}
+              onSelect={setSelectedProtocolId}
+            />
+          </section>
+          {selectedProtocol ? (
+          <div className="manager-shift-grid">
         <section className="manager-panel">
           <div className="manager-panel__header">
             <h2>Categories</h2>
@@ -979,6 +1073,9 @@ export function ManagerPage() {
             ))}
           </div>
         </section>
+          </div>
+          ) : <p className="status-banner">Select or create a protocol to manage its categories and tasks.</p>}
+        </div>
       </main>
 
       {isDialogOpen ? (

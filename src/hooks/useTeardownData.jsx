@@ -8,7 +8,7 @@ import {
 import { fetchCategories, createCategory, updateCategory, deleteCategory } from '../services/categoryService'
 import { createApprovalRecord, fetchApprovalHistory } from '../services/approvalService'
 import { createEmployee, deleteEmployee, fetchEmployees, updateEmployee } from '../services/employeeService'
-import { fetchDepartments, fetchProtocols } from '../services/protocolService'
+import { createProtocol, updateProtocol, deleteProtocol, createDepartment, updateDepartment, deleteDepartment, fetchDepartments, fetchProtocols } from '../services/protocolService'
 import {
   createTask,
   deleteTask,
@@ -20,11 +20,15 @@ import {
 } from '../services/taskService'
 import {
   loadCachedBoard,
+  loadBoardSelection,
+  saveBoardSelection,
   loadCurrentEmployeeId,
   saveCachedBoard,
   saveCurrentEmployeeId,
 } from '../services/storageService'
 import { supabase } from '../services/supabaseClient'
+
+import { resolveBoardSelection, categoriesForSelection } from '../services/boardSelection'
 
 const TeardownDataContext = createContext(null)
 
@@ -143,14 +147,20 @@ function defaultHistoryFromDate() {
 }
 
 export function TeardownDataProvider({ children }) {
-  const cachedBoard = loadCachedBoard()
+  const [cachedBoard] = useState(loadCachedBoard)
   const [categories, setCategories] = useState(cachedBoard?.categories ?? [])
   const [tasks, setTasks] = useState(cachedBoard?.tasks ?? [])
   const [employees, setEmployees] = useState(cachedBoard?.employees ?? [])
   const [departments, setDepartments] = useState(cachedBoard?.departments ?? [])
   const [protocols, setProtocols] = useState(cachedBoard?.protocols ?? [])
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState(cachedBoard?.selectedDepartmentId ?? '')
-  const [selectedProtocolId, setSelectedProtocolId] = useState(cachedBoard?.selectedProtocolId ?? '')
+  const [selection, setSelection] = useState(loadBoardSelection)
+  const { selectedDepartmentId, selectedProtocolId } = resolveBoardSelection(departments, protocols, selection)
+  const setSelectedDepartmentId = (id) => setSelection((current) => ({
+    ...current, selectedDepartmentId: id,
+  }))
+  const setSelectedProtocolId = (id) => setSelection((current) => ({
+    ...current, selectedDepartmentId, selectedProtocolId: id,
+  }))
   const [currentEmployeeId, setCurrentEmployeeId] = useState(loadCurrentEmployeeId())
   const [historyFromDate, setHistoryFromDate] = useState(defaultHistoryFromDate)
   const [historyToDate, setHistoryToDate] = useState(() => toDateInputValue(new Date()))
@@ -198,28 +208,18 @@ export function TeardownDataProvider({ children }) {
         const nextEmployees = sortEmployees(fetchedEmployees)
         const nextDepartments = sortByOrderThenName(fetchedDepartments)
         const nextProtocols = sortByOrderThenName(fetchedProtocols)
-        const nextDepartmentId =
-          selectedDepartmentId || nextDepartments[0]?.id || ''
-        const nextProtocolId =
-          selectedProtocolId ||
-          nextProtocols.find((protocol) => protocol.department_id === nextDepartmentId && protocol.active)?.id ||
-          ''
-
         setCategories(nextCategories)
         setTasks(nextTasks)
         setEmployees(nextEmployees)
         setDepartments(nextDepartments)
         setProtocols(nextProtocols)
-        setSelectedDepartmentId(nextDepartmentId)
-        setSelectedProtocolId(nextProtocolId)
         saveCachedBoard({
           categories: nextCategories,
           tasks: nextTasks,
           employees: nextEmployees,
           departments: nextDepartments,
           protocols: nextProtocols,
-          selectedDepartmentId: nextDepartmentId,
-          selectedProtocolId: nextProtocolId,
+
         })
       } catch (error) {
         console.error('Failed to load teardown board from Supabase.', error)
@@ -269,30 +269,9 @@ export function TeardownDataProvider({ children }) {
   }, [currentEmployeeId, employees])
 
   useEffect(() => {
-    if (
-      selectedDepartmentId &&
-      departments.some((department) => department.id === selectedDepartmentId)
-    ) {
-      return
-    }
-
-    setSelectedDepartmentId(departments[0]?.id ?? '')
-  }, [departments, selectedDepartmentId])
-
-  useEffect(() => {
-    const departmentProtocols = protocols.filter(
-      (protocol) => protocol.department_id === selectedDepartmentId && protocol.active,
-    )
-
-    if (
-      selectedProtocolId &&
-      departmentProtocols.some((protocol) => protocol.id === selectedProtocolId)
-    ) {
-      return
-    }
-
-    setSelectedProtocolId(departmentProtocols[0]?.id ?? '')
-  }, [protocols, selectedDepartmentId, selectedProtocolId])
+    if (departments.length === 0) return
+    saveBoardSelection({ selectedDepartmentId, selectedProtocolId })
+  }, [departments.length, selectedDepartmentId, selectedProtocolId])
 
   useEffect(() => {
     if (!supabase) {
@@ -366,8 +345,8 @@ export function TeardownDataProvider({ children }) {
     [protocols, selectedDepartmentId],
   )
   const currentCategories = useMemo(
-    () => categories.filter((category) => !selectedProtocolId || category.protocol_id === selectedProtocolId),
-    [categories, selectedProtocolId],
+    () => categoriesForSelection(categories, protocols, selectedDepartmentId, selectedProtocolId),
+    [categories, protocols, selectedDepartmentId, selectedProtocolId],
   )
   const currentCategoryIds = useMemo(
     () => new Set(currentCategories.map((category) => category.id)),
@@ -650,6 +629,31 @@ export function TeardownDataProvider({ children }) {
     }
   }
 
+  const saveProtocol = async (draft, protocolId) => {
+    const savedProtocol = protocolId ? await updateProtocol(protocolId, draft) : await createProtocol(draft)
+    setProtocols((current) => sortByOrderThenName(upsertRow(current, savedProtocol)))
+    setSelection({ selectedDepartmentId: savedProtocol.department_id, selectedProtocolId: savedProtocol.id })
+    return savedProtocol
+  }
+
+  const saveDepartment = async (draft, departmentId) => {
+    const saved = departmentId ? await updateDepartment(departmentId, draft) : await createDepartment(draft)
+    setDepartments((current) => sortByOrderThenName(upsertRow(current, saved)))
+    setSelectedDepartmentId(saved.id)
+    return saved
+  }
+
+  const removeDepartment = async (id) => {
+    await deleteDepartment(id)
+    setDepartments((current) => current.filter((row) => row.id !== id))
+    setProtocols((current) => current.filter((row) => row.department_id !== id))
+  }
+
+  const removeProtocol = async (id) => {
+    await deleteProtocol(id)
+    setProtocols((current) => current.filter((row) => row.id !== id))
+  }
+
   const saveCategory = async (draft, categoryId) => {
     const payload = {
       protocol_id: draft.protocol_id || selectedProtocolId,
@@ -769,6 +773,10 @@ export function TeardownDataProvider({ children }) {
     setSelectedProtocolId,
     setHistoryFromDate,
     setHistoryToDate,
+    saveProtocol,
+    saveDepartment,
+    removeDepartment,
+    removeProtocol,
     saveCategory,
     removeCategory,
     saveTask,

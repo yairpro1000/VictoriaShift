@@ -47,3 +47,24 @@ export function saveCurrentEmployeeId(employeeId) {
 
   window.localStorage.setItem(CURRENT_EMPLOYEE_KEY, employeeId)
 }
+
+const BOARD_SELECTION_KEY = 'victoria-shift-board-selection'
+
+export function loadBoardSelection() {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(BOARD_SELECTION_KEY)
+    const saved = raw ? JSON.parse(raw) : loadCachedBoard()
+    return saved?.selectedDepartmentId ? {
+      selectedDepartmentId: saved.selectedDepartmentId,
+      selectedProtocolId: saved.selectedProtocolId ?? '',
+    } : null
+  } catch {
+    return null
+  }
+}
+
+export function saveBoardSelection(selection) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(BOARD_SELECTION_KEY, JSON.stringify(selection))
+}
