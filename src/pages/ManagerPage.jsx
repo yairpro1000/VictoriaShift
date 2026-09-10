@@ -60,6 +60,7 @@ export function ManagerPage() {
     setSelectedProtocolId,
     saveProtocol,
     saveDepartment,
+    saveDepartmentOrder,
     removeDepartment,
     removeProtocol,
     protocols,
@@ -669,6 +670,7 @@ export function ManagerPage() {
               rows={departments}
               onSave={saveDepartment}
               onDelete={removeDepartment}
+              onReorder={saveDepartmentOrder}
             />
             <NamedEntityManager
               key={selectedDepartmentId}

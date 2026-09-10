@@ -164,3 +164,29 @@ for (const [code, message] of [
     assert.equal(logs.at(-1).reason, 'Database reason')
   })
 }
+
+test('department reorder writes sequential positions and logs each result', async () => {
+  const { service, logs, calls } = await setupEntities()
+  await service.reorderDepartments(['second', 'first'])
+  assert.deepEqual(calls.map((call) => call.payload.sort_order), [0, 1])
+  assert.ok(calls.every((call) => call.table === 'departments'))
+  assert.equal(logs.filter((log) => log.event === 'department_reorder_updated').length, 2)
+  assert.equal(logs.at(-1).event, 'department_reorder_succeeded')
+})
+
+test('department reorder rejects duplicate IDs before writes', async () => {
+  const { service, logs, calls } = await setupEntities()
+  await assert.rejects(service.reorderDepartments(['same', 'same']), /unique department IDs/)
+  assert.equal(calls.length, 0)
+  assert.equal(logs.at(-1).event, 'department_reorder_failed')
+})
+
+test('department reorder stops and diagnoses a denied update', async () => {
+  const { service, logs, calls } = await setupEntities({
+    error: { code: '42501', message: 'Update denied by row security' },
+  })
+  await assert.rejects(service.reorderDepartments(['one', 'two']), /Update denied by row security/)
+  assert.equal(calls.length, 1)
+  assert.equal(logs.at(-1).event, 'department_reorder_failed')
+  assert.equal(logs.at(-1).code, '42501')
+})

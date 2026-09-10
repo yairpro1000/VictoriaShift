@@ -1285,3 +1285,16 @@ article {
   gap: 1rem;
   margin-bottom: 1rem;
 }
+
+.department-drag-handle {
+  border: 0;
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  background: rgba(0, 0, 0, 0.06);
+  font-size: 1.5rem;
+  cursor: grab;
+  touch-action: none;
+}
+.department-drag-handle:active { cursor: grabbing; }
+.department-drag-handle:disabled { cursor: default; opacity: 0.4; }
+.manager-item--drop-target { outline: 3px solid #508957; }

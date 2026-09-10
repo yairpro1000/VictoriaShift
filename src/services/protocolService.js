@@ -119,3 +119,30 @@ export const updateDepartment = (id, draft) => mutateNamedEntity('departments', 
 export const deleteDepartment = (id) => mutateNamedEntity('departments', 'delete', id)
 export const updateProtocol = (id, draft) => mutateNamedEntity('protocols', 'update', id, draft)
 export const deleteProtocol = (id) => mutateNamedEntity('protocols', 'delete', id)
+
+export async function reorderDepartments(ids) {
+  console.info('department_reorder_attempt', { ids })
+  try {
+    if (!Array.isArray(ids) || !ids.length || new Set(ids).size !== ids.length) {
+      throw new Error('Department order must contain unique department IDs.')
+    }
+    const supabase = requireSupabase()
+    const saved = []
+    for (const [sort_order, id] of ids.entries()) {
+      console.info('department_reorder_update', { id, sort_order })
+      const { data, error } = await supabase.from('departments')
+        .update({ sort_order }).eq('id', id).select('*').single()
+      if (error) throw error
+      saved.push(data)
+      console.info('department_reorder_updated', { id, sort_order })
+    }
+    console.info('department_reorder_succeeded', { ids })
+    return saved
+  } catch (error) {
+    console.error('department_reorder_failed', {
+      ids, reason: error.message, code: error.code ?? null,
+      details: error.details ?? null, hint: error.hint ?? null,
+    })
+    throw new Error(`Department order could not be fully saved: ${error.message}`)
+  }
+}

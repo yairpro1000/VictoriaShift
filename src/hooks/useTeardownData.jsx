@@ -8,7 +8,7 @@ import {
 import { fetchCategories, createCategory, updateCategory, deleteCategory } from '../services/categoryService'
 import { createApprovalRecord, fetchApprovalHistory } from '../services/approvalService'
 import { createEmployee, deleteEmployee, fetchEmployees, updateEmployee } from '../services/employeeService'
-import { createProtocol, updateProtocol, deleteProtocol, createDepartment, updateDepartment, deleteDepartment, fetchDepartments, fetchProtocols } from '../services/protocolService'
+import { reorderDepartments, createProtocol, updateProtocol, deleteProtocol, createDepartment, updateDepartment, deleteDepartment, fetchDepartments, fetchProtocols } from '../services/protocolService'
 import {
   createTask,
   deleteTask,
@@ -643,6 +643,23 @@ export function TeardownDataProvider({ children }) {
     return saved
   }
 
+  const saveDepartmentOrder = async (ids) => {
+    try {
+      const saved = await reorderDepartments(ids)
+      setDepartments((current) => sortByOrderThenName(
+        current.map((row) => saved.find((item) => item.id === row.id) ?? row),
+      ))
+    } catch (error) {
+      // Reconcile any updates that reached the database before a failure.
+      try {
+        setDepartments(sortByOrderThenName(await fetchDepartments()))
+      } catch (refreshError) {
+        console.error('department_reorder_refresh_failed', { reason: refreshError.message })
+      }
+      throw error
+    }
+  }
+
   const removeDepartment = async (id) => {
     await deleteDepartment(id)
     setDepartments((current) => current.filter((row) => row.id !== id))
@@ -775,6 +792,7 @@ export function TeardownDataProvider({ children }) {
     setHistoryToDate,
     saveProtocol,
     saveDepartment,
+    saveDepartmentOrder,
     removeDepartment,
     removeProtocol,
     saveCategory,
