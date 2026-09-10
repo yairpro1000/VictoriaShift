@@ -87,6 +87,7 @@ function buildHistoryGroups(tasks) {
 
 export function ChecklistPage() {
   const {
+    user,
     approvalHistory,
     currentCategories,
     currentEmployeeId,
@@ -183,7 +184,7 @@ export function ChecklistPage() {
             Manager
           </Link>
         </div>
-        <div className="view-tabs" role="tablist" aria-label="Checklist views">
+        <div hidden={Boolean(user)} className="view-tabs" role="tablist" aria-label="Checklist views">
           <button
             type="button"
             className={`view-tab${activeTab === 'current' ? ' view-tab--active' : ''}`}
@@ -206,7 +207,7 @@ export function ChecklistPage() {
 
       {activeTab === 'current' ? (
         <>
-          <div className="employee-picker" role="region" aria-label="Current employee">
+          {!user ? <div className="employee-picker" role="region" aria-label="Current employee">
             <label>
               Current employee
               <select
@@ -221,7 +222,7 @@ export function ChecklistPage() {
                 ))}
               </select>
             </label>
-          </div>
+          </div> : null}
 
           <Board
             tasksByStatus={tasksByStatus}
@@ -229,7 +230,7 @@ export function ChecklistPage() {
             onSetTaskDone={setTaskDone}
           />
 
-          <ApproveFooter disabled={!areAllTasksDone} onApprove={approveShift} />
+          {!user ? <ApproveFooter disabled={!areAllTasksDone} onApprove={approveShift} /> : null}
         </>
       ) : (
         <main className="history-view">

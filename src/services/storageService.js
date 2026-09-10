@@ -1,30 +1,33 @@
 const STORAGE_KEY = 'victoria-shift-board-cache'
 const CURRENT_EMPLOYEE_KEY = 'victoria-shift-current-employee-id'
 
-export function loadCachedBoard() {
+export function loadCachedBoard(scope = 'public') {
   if (typeof window === 'undefined') {
     return null
   }
 
-  const raw = window.localStorage.getItem(STORAGE_KEY)
+  const raw = window.localStorage.getItem(scope === 'public' ? STORAGE_KEY : `${STORAGE_KEY}:${scope}`)
 
   if (!raw) {
     return null
   }
 
   try {
-    return JSON.parse(raw)
+    const board = JSON.parse(raw)
+    const expectedOwner = scope === 'public' ? null : scope
+    if (board?.departments?.some((department) => (department.user_id ?? null) !== expectedOwner)) return null
+    return board
   } catch {
     return null
   }
 }
 
-export function saveCachedBoard(board) {
+export function saveCachedBoard(board, scope = 'public') {
   if (typeof window === 'undefined') {
     return
   }
 
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(board))
+  window.localStorage.setItem(scope === 'public' ? STORAGE_KEY : `${STORAGE_KEY}:${scope}`, JSON.stringify(board))
 }
 
 export function loadCurrentEmployeeId() {
@@ -50,11 +53,11 @@ export function saveCurrentEmployeeId(employeeId) {
 
 const BOARD_SELECTION_KEY = 'victoria-shift-board-selection'
 
-export function loadBoardSelection() {
+export function loadBoardSelection(scope = 'public') {
   if (typeof window === 'undefined') return null
   try {
-    const raw = window.localStorage.getItem(BOARD_SELECTION_KEY)
-    const saved = raw ? JSON.parse(raw) : loadCachedBoard()
+    const raw = window.localStorage.getItem(scope === 'public' ? BOARD_SELECTION_KEY : `${BOARD_SELECTION_KEY}:${scope}`)
+    const saved = raw ? JSON.parse(raw) : loadCachedBoard(scope)
     return saved?.selectedDepartmentId ? {
       selectedDepartmentId: saved.selectedDepartmentId,
       selectedProtocolId: saved.selectedProtocolId ?? '',
@@ -64,7 +67,7 @@ export function loadBoardSelection() {
   }
 }
 
-export function saveBoardSelection(selection) {
+export function saveBoardSelection(selection, scope = 'public') {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(BOARD_SELECTION_KEY, JSON.stringify(selection))
+  window.localStorage.setItem(scope === 'public' ? BOARD_SELECTION_KEY : `${BOARD_SELECTION_KEY}:${scope}`, JSON.stringify(selection))
 }

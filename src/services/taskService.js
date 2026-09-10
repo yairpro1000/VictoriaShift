@@ -34,7 +34,7 @@ export async function updateTaskDoneState(taskId, done, completedAt, completedBy
   return data
 }
 
-export async function createTask(payload) {
+async function createTaskRequest(payload) {
   const supabase = requireSupabase()
   const { data, error } = await supabase
     .from('tasks')
@@ -49,7 +49,7 @@ export async function createTask(payload) {
   return data
 }
 
-export async function updateTask(taskId, payload) {
+async function updateTaskRequest(taskId, payload) {
   const supabase = requireSupabase()
   const { data, error } = await supabase
     .from('tasks')
@@ -65,9 +65,9 @@ export async function updateTask(taskId, payload) {
   return data
 }
 
-export async function deleteTask(taskId) {
+async function deleteTaskRequest(taskId) {
   const supabase = requireSupabase()
-  const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+  const { error } = await supabase.from('tasks').delete().eq('id', taskId).select('id').single()
 
   if (error) {
     throw error
@@ -131,3 +131,20 @@ export function subscribeToTaskChanges({
     )
     .subscribe()
 }
+
+async function taskMutation(operation, request, args) {
+  console.info('task_mutation_attempt', { operation, taskId: typeof args[0] === 'string' ? args[0] : null })
+  try {
+    const data = await request(...args)
+    console.info('task_mutation_succeeded', { operation, taskId: data?.id ?? args[0]?.id ?? null })
+    return data
+  } catch (error) {
+    console.error('task_mutation_failed', { operation, reason: error.message, code: error.code ?? null, details: error.details ?? null })
+    throw new Error(error.code === '42501' || error.code === 'PGRST116'
+      ? 'This task is unavailable or your session does not have permission to change it.'
+      : error.message)
+  }
+}
+export const createTask = (...args) => taskMutation('create', createTaskRequest, args)
+export const updateTask = (...args) => taskMutation('update', updateTaskRequest, args)
+export const deleteTask = (...args) => taskMutation('delete', deleteTaskRequest, args)

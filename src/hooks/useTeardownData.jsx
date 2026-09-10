@@ -76,7 +76,7 @@ function attachEmployee(task, employeesById) {
   }
 }
 
-function buildTasksByStatus(categories, tasks, employees) {
+function buildTasksByStatus(categories, tasks, employees, privateMode = false) {
   const employeesById = new Map(employees.map((employee) => [employee.id, employee]))
 
   const todoCategories = []
@@ -97,7 +97,7 @@ function buildTasksByStatus(categories, tasks, employees) {
           new Date(left.completed_at ?? 0).getTime(),
       )
 
-    if (todoTasks.length > 0) {
+    if (todoTasks.length > 0 || (privateMode && categoryTasks.length === 0)) {
       todoCategories.push({ category, tasks: todoTasks })
     }
 
@@ -146,14 +146,15 @@ function defaultHistoryFromDate() {
   return toDateInputValue(date)
 }
 
-export function TeardownDataProvider({ children }) {
-  const [cachedBoard] = useState(loadCachedBoard)
+export function TeardownDataProvider({ children, user = null }) {
+  const scope = user?.id ?? 'public'
+  const [cachedBoard] = useState(() => loadCachedBoard(scope))
   const [categories, setCategories] = useState(cachedBoard?.categories ?? [])
   const [tasks, setTasks] = useState(cachedBoard?.tasks ?? [])
   const [employees, setEmployees] = useState(cachedBoard?.employees ?? [])
   const [departments, setDepartments] = useState(cachedBoard?.departments ?? [])
   const [protocols, setProtocols] = useState(cachedBoard?.protocols ?? [])
-  const [selection, setSelection] = useState(loadBoardSelection)
+  const [selection, setSelection] = useState(() => loadBoardSelection(scope))
   const { selectedDepartmentId, selectedProtocolId } = resolveBoardSelection(departments, protocols, selection)
   const setSelectedDepartmentId = (id) => setSelection((current) => ({
     ...current, selectedDepartmentId: id,
@@ -213,14 +214,6 @@ export function TeardownDataProvider({ children }) {
         setEmployees(nextEmployees)
         setDepartments(nextDepartments)
         setProtocols(nextProtocols)
-        saveCachedBoard({
-          categories: nextCategories,
-          tasks: nextTasks,
-          employees: nextEmployees,
-          departments: nextDepartments,
-          protocols: nextProtocols,
-
-        })
       } catch (error) {
         console.error('Failed to load teardown board from Supabase.', error)
 
@@ -252,7 +245,7 @@ export function TeardownDataProvider({ children }) {
       protocols,
       selectedDepartmentId,
       selectedProtocolId,
-    })
+    }, scope)
   }, [categories, departments, employees, protocols, selectedDepartmentId, selectedProtocolId, tasks])
 
   useEffect(() => {
@@ -270,7 +263,7 @@ export function TeardownDataProvider({ children }) {
 
   useEffect(() => {
     if (departments.length === 0) return
-    saveBoardSelection({ selectedDepartmentId, selectedProtocolId })
+    saveBoardSelection({ selectedDepartmentId, selectedProtocolId }, scope)
   }, [departments.length, selectedDepartmentId, selectedProtocolId])
 
   useEffect(() => {
@@ -357,7 +350,7 @@ export function TeardownDataProvider({ children }) {
     [currentCategoryIds, tasks],
   )
   const tasksByStatus = useMemo(
-    () => buildTasksByStatus(currentCategories, currentTasks, employees),
+    () => buildTasksByStatus(currentCategories, currentTasks, employees, Boolean(user)),
     [currentCategories, currentTasks, employees],
   )
 
@@ -403,11 +396,11 @@ export function TeardownDataProvider({ children }) {
 
   const setTaskDone = async (taskId, done) => {
     const completedAt = done ? new Date().toISOString() : null
-    const completedBy = done ? currentEmployeeId : null
+    const completedBy = done && !user ? currentEmployeeId : null
     const completedByEmployee =
       employees.find((employee) => employee.id === completedBy) ?? null
 
-    if (done && !completedBy) {
+    if (done && !completedBy && !user) {
       console.info('task_done_blocked', {
         taskId,
         reason: 'missing_current_employee',
@@ -750,6 +743,7 @@ export function TeardownDataProvider({ children }) {
   }
 
   const value = {
+    user,
     categories,
     currentCategories,
     currentEmployeeId,

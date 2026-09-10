@@ -1,3 +1,6 @@
+import { useState } from 'react'
+import { useTeardownData } from '../hooks/useTeardownData'
+import { PrivateTaskEditor } from './PrivateTaskEditor'
 import { TaskCard } from './TaskCard'
 import { getCategoryIcon } from './icons/taskIcons'
 
@@ -8,7 +11,9 @@ export function CategorySection({
   onToggleTask,
   onSetTaskDone,
 }) {
-  const allDone = tasks.every((task) => task.done)
+  const { user } = useTeardownData()
+  const [adding, setAdding] = useState(false)
+  const allDone = tasks.length > 0 && tasks.every((task) => task.done)
   const CategoryIcon = getCategoryIcon(category.id)
 
   const handleDragOver = (event) => {
@@ -46,8 +51,10 @@ export function CategorySection({
           ) : null}
           {category.name}
         </h3>
+        {user ? <button className="category-add-task" type="button" aria-label={`Add task to ${category.name}`} onClick={() => setAdding(true)}>+</button> : null}
         <span>{tasks.length}</span>
       </div>
+      {adding ? <PrivateTaskEditor category={category} onClose={() => setAdding(false)} /> : null}
       <div className="category-section__tasks">
         {tasks.map((task) => (
           <TaskCard
