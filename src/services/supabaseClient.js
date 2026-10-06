@@ -1,12 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 import { shareAwareFetch } from './shareContext'
+import { getShareSession } from './shareSession'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 
 export const supabase =
   supabaseUrl && supabasePublishableKey
-    ? createClient(supabaseUrl, supabasePublishableKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }, global: { fetch: shareAwareFetch((...args) => fetch(...args), () => window.location.pathname) } })
+    ? createClient(supabaseUrl, supabasePublishableKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }, global: { fetch: shareAwareFetch((...args) => fetch(...args), () => window.location.pathname, getShareSession) } })
     : null
 
 export function requireSupabase() {

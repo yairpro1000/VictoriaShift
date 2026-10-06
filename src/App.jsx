@@ -3,12 +3,14 @@ import { UserMenu } from './components/UserMenu'
 import { InstallPrompt } from './components/InstallPrompt'
 import { ChecklistPage } from './pages/ChecklistPage'
 import { ManagerPage } from './pages/ManagerPage'
+import { useTeardownData } from './hooks/useTeardownData'
 
 export default function App() {
+  const { sharedAccess } = useTeardownData()
   return (
     <>
       <InstallPrompt />
-      <UserMenu />
+      {!sharedAccess ? <UserMenu /> : null}
       <Routes>
         <Route path="/" element={<ChecklistPage />} />
         <Route path="/share/:token" element={<ChecklistPage />} />

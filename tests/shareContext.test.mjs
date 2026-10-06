@@ -10,6 +10,22 @@ test('share route recognizes board and manager while malformed routes fail close
   assert.equal(shareRoute('/share/invalid').token, null)
   assert.equal(shareRoute('/share/' + token + '/unexpected').token, null)
 })
+test('session secret is tied to one link and stripped from ordinary and malformed routes', async () => {
+  let path = '/share/' + token
+  const requests = []
+  const session = 'b'.repeat(64)
+  const fetcher = shareAwareFetch(async (url, options) => requests.push(options.headers), () => path, link => link === token ? session : null)
+  await fetcher('https://example.com/rest/v1/tasks')
+  path += '/manager'
+  await fetcher('https://example.com/rest/v1/tasks')
+  for (const next of ['/share/' + 'c'.repeat(64), '/share/invalid', '/']) {
+    path = next
+    await fetcher('https://example.com/rest/v1/tasks', { headers: { 'x-protocol-session': session } })
+  }
+  assert.equal(requests[0].get('x-protocol-session'),session)
+  assert.equal(requests[1].get('x-protocol-session'),session)
+  for (const request of requests.slice(2)) assert.equal(request.get('x-protocol-session'),null)
+})
 test('share header is request-local, preserves authorization and clears on normal navigation', async () => {
   let path = '/share/' + token
   const requests = []
