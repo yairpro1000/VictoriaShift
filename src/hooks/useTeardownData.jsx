@@ -30,6 +30,8 @@ import { supabase } from '../services/supabaseClient'
 
 import { resolveBoardSelection, categoriesForSelection } from '../services/boardSelection'
 
+import { resolveProtocolShare } from '../services/shareService'
+
 const TeardownDataContext = createContext(null)
 
 function sortCategories(categories) {
@@ -146,15 +148,17 @@ function defaultHistoryFromDate() {
   return toDateInputValue(date)
 }
 
-export function TeardownDataProvider({ children, user = null }) {
+export function TeardownDataProvider({ children, user = null, sharedAccess = null, onShareDenied }) {
   const scope = user?.id ?? 'public'
-  const [cachedBoard] = useState(() => loadCachedBoard(scope))
+  const [cachedBoard] = useState(() => sharedAccess ? null : loadCachedBoard(scope))
   const [categories, setCategories] = useState(cachedBoard?.categories ?? [])
   const [tasks, setTasks] = useState(cachedBoard?.tasks ?? [])
   const [employees, setEmployees] = useState(cachedBoard?.employees ?? [])
   const [departments, setDepartments] = useState(cachedBoard?.departments ?? [])
   const [protocols, setProtocols] = useState(cachedBoard?.protocols ?? [])
-  const [selection, setSelection] = useState(() => loadBoardSelection(scope))
+  const [selection, setSelection] = useState(() => sharedAccess
+    ? { selectedDepartmentId: sharedAccess.department_id, selectedProtocolId: sharedAccess.protocol_id }
+    : loadBoardSelection(scope))
   const { selectedDepartmentId, selectedProtocolId } = resolveBoardSelection(departments, protocols, selection)
   const setSelectedDepartmentId = (id) => setSelection((current) => ({
     ...current, selectedDepartmentId: id,
@@ -186,6 +190,7 @@ export function TeardownDataProvider({ children, user = null }) {
       setErrorMessage('')
 
       try {
+        if (sharedAccess) await resolveProtocolShare()
         const [
           fetchedCategories,
           fetchedTasks,
@@ -204,11 +209,12 @@ export function TeardownDataProvider({ children, user = null }) {
           return
         }
 
-        const nextCategories = sortCategories(fetchedCategories)
-        const nextTasks = sortTasks(fetchedTasks)
-        const nextEmployees = sortEmployees(fetchedEmployees)
-        const nextDepartments = sortByOrderThenName(fetchedDepartments)
-        const nextProtocols = sortByOrderThenName(fetchedProtocols)
+        const nextCategories = sortCategories(sharedAccess ? fetchedCategories.filter((row) => row.protocol_id === sharedAccess.protocol_id) : fetchedCategories)
+        const categoryIds = new Set(nextCategories.map((row) => row.id))
+        const nextTasks = sortTasks(sharedAccess ? fetchedTasks.filter((row) => categoryIds.has(row.category_id)) : fetchedTasks)
+        const nextEmployees = sortEmployees(sharedAccess ? [] : fetchedEmployees)
+        const nextDepartments = sortByOrderThenName(sharedAccess ? fetchedDepartments.filter((row) => row.id === sharedAccess.department_id) : fetchedDepartments)
+        const nextProtocols = sortByOrderThenName(sharedAccess ? fetchedProtocols.filter((row) => row.id === sharedAccess.protocol_id) : fetchedProtocols)
         setCategories(nextCategories)
         setTasks(nextTasks)
         setEmployees(nextEmployees)
@@ -221,7 +227,12 @@ export function TeardownDataProvider({ children, user = null }) {
           return
         }
 
-        setErrorMessage('Using cached data. Live sync is currently unavailable.')
+        if (sharedAccess) {
+          setCategories([]); setTasks([]); setDepartments([]); setProtocols([])
+          onShareDenied?.(error)
+        } else {
+          setErrorMessage('Using cached data. Live sync is currently unavailable.')
+        }
       } finally {
         if (isMounted) {
           setLoading(false)
@@ -230,13 +241,18 @@ export function TeardownDataProvider({ children, user = null }) {
     }
 
     loadBoard()
+    // Realtime authorization does not carry the per-request share header.
+    // Poll through the same RLS-scoped HTTP path, without widening permissions.
+    const poll = sharedAccess ? setInterval(loadBoard, 15000) : null
 
     return () => {
+      if (poll) clearInterval(poll)
       isMounted = false
     }
   }, [])
 
   useEffect(() => {
+    if (sharedAccess) return
     saveCachedBoard({
       categories,
       tasks,
@@ -262,12 +278,12 @@ export function TeardownDataProvider({ children, user = null }) {
   }, [currentEmployeeId, employees])
 
   useEffect(() => {
-    if (departments.length === 0) return
+    if (sharedAccess || departments.length === 0) return
     saveBoardSelection({ selectedDepartmentId, selectedProtocolId }, scope)
   }, [departments.length, selectedDepartmentId, selectedProtocolId])
 
   useEffect(() => {
-    if (!supabase) {
+    if (!supabase || sharedAccess) {
       return undefined
     }
 
@@ -744,6 +760,7 @@ export function TeardownDataProvider({ children, user = null }) {
 
   const value = {
     user,
+    sharedAccess,
     categories,
     currentCategories,
     currentEmployeeId,

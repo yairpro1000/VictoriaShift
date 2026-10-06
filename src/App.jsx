@@ -11,6 +11,8 @@ export default function App() {
       <UserMenu />
       <Routes>
         <Route path="/" element={<ChecklistPage />} />
+        <Route path="/share/:token" element={<ChecklistPage />} />
+        <Route path="/share/:token/manager" element={<ManagerPage />} />
         <Route path="/manager" element={<ManagerPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
