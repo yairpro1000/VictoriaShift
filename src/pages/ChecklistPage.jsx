@@ -185,7 +185,7 @@ export function ChecklistPage() {
             Manager
           </Link>
         </div>
-        <div hidden={Boolean(user)} className="view-tabs" role="tablist" aria-label="Checklist views">
+        <div hidden={Boolean(user || sharedAccess)} className="view-tabs" role="tablist" aria-label="Checklist views">
           <button
             type="button"
             className={`view-tab${activeTab === 'current' ? ' view-tab--active' : ''}`}
@@ -208,7 +208,7 @@ export function ChecklistPage() {
 
       {activeTab === 'current' ? (
         <>
-          {!user ? <div className="employee-picker" role="region" aria-label="Current employee">
+          {!(user || sharedAccess) ? <div className="employee-picker" role="region" aria-label="Current employee">
             <label>
               Current employee
               <select
@@ -231,7 +231,7 @@ export function ChecklistPage() {
             onSetTaskDone={setTaskDone}
           />
 
-          {!user ? <ApproveFooter disabled={!areAllTasksDone} onApprove={approveShift} /> : null}
+          {!(user || sharedAccess) ? <ApproveFooter disabled={!areAllTasksDone} onApprove={approveShift} /> : null}
         </>
       ) : (
         <main className="history-view">

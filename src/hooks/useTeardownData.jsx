@@ -366,14 +366,14 @@ export function TeardownDataProvider({ children, user = null, sharedAccess = nul
     [currentCategoryIds, tasks],
   )
   const tasksByStatus = useMemo(
-    () => buildTasksByStatus(currentCategories, currentTasks, employees, Boolean(user)),
+    () => buildTasksByStatus(currentCategories, currentTasks, employees, Boolean(user || sharedAccess)),
     [currentCategories, currentTasks, employees],
   )
 
   const areAllTasksDone = currentTasks.length > 0 && currentTasks.every((task) => task.done)
 
   const loadApprovalHistory = async () => {
-    if (!selectedDepartmentId || !selectedProtocolId) {
+    if (sharedAccess || !selectedDepartmentId || !selectedProtocolId) {
       setApprovalHistory([])
       return
     }
@@ -412,11 +412,11 @@ export function TeardownDataProvider({ children, user = null, sharedAccess = nul
 
   const setTaskDone = async (taskId, done) => {
     const completedAt = done ? new Date().toISOString() : null
-    const completedBy = done && !user ? currentEmployeeId : null
+    const completedBy = done && !user && !sharedAccess ? currentEmployeeId : null
     const completedByEmployee =
       employees.find((employee) => employee.id === completedBy) ?? null
 
-    if (done && !completedBy && !user) {
+    if (done && !completedBy && !user && !sharedAccess) {
       console.info('task_done_blocked', {
         taskId,
         reason: 'missing_current_employee',

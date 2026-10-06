@@ -78,7 +78,7 @@ export function ManagerPage() {
     saveEmployee,
     removeEmployee,
   } = useTeardownData()
-  const [activeTab, setActiveTab] = useState(user ? 'protocols' : 'employees')
+  const [activeTab, setActiveTab] = useState(user || sharedAccess ? 'protocols' : 'employees')
   const [employeeDraft, setEmployeeDraft] = useState(EMPTY_EMPLOYEE)
   const [editingEmployeeId, setEditingEmployeeId] = useState(null)
   const [employeeStatus, setEmployeeStatus] = useState('')
@@ -91,7 +91,7 @@ export function ManagerPage() {
   const [taskStatus, setTaskStatus] = useState('')
   const [passwordValue, setPasswordValue] = useState('')
   const [passwordError, setPasswordError] = useState('')
-  const [isUnlocked, setIsUnlocked] = useState(Boolean(user))
+  const [isUnlocked, setIsUnlocked] = useState(Boolean(user || sharedAccess))
   const [dialogState, setDialogState] = useState(EMPTY_DIALOG)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDialogBusy, setIsDialogBusy] = useState(false)
@@ -125,7 +125,7 @@ export function ManagerPage() {
       return
     }
 
-    setIsUnlocked(Boolean(user) || window.sessionStorage.getItem(MANAGER_SESSION_KEY) === 'true')
+    setIsUnlocked(Boolean(user || sharedAccess) || window.sessionStorage.getItem(MANAGER_SESSION_KEY) === 'true')
   }, [])
 
   const resetCategoryForm = () => {
@@ -498,7 +498,7 @@ export function ManagerPage() {
 
       <main className={`manager-grid${!isUnlocked ? ' manager-grid--locked' : ''}`} aria-hidden={!isUnlocked} inert={!isUnlocked}>
         <div className="view-tabs" role="tablist" aria-label="Manager views">
-          {(user ? ['protocols'] : ['employees', 'protocols']).map((tab, index) => (
+          {(user || sharedAccess ? ['protocols'] : ['employees', 'protocols']).map((tab, index) => (
             <button
               key={tab}
               id={`manager-tab-${tab}`}
@@ -510,7 +510,7 @@ export function ManagerPage() {
               tabIndex={activeTab === tab ? 0 : -1}
               onClick={() => setActiveTab(tab)}
               onKeyDown={(event) => {
-                if (user) return
+                if (user || sharedAccess) return
                 if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
                 event.preventDefault()
                 const nextTab = event.key === 'Home' ? 'employees'
@@ -523,7 +523,7 @@ export function ManagerPage() {
             </button>
           ))}
         </div>
-        <div id="manager-panel-employees" role="tabpanel" aria-labelledby="manager-tab-employees" hidden={Boolean(user) || activeTab !== 'employees'}>
+        <div id="manager-panel-employees" role="tabpanel" aria-labelledby="manager-tab-employees" hidden={Boolean(user || sharedAccess) || activeTab !== 'employees'}>
         <section className="manager-panel">
           <div className="manager-panel__header">
             <h2>Employees</h2>

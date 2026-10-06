@@ -1,76 +1,64 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useAuth } from '../hooks/useAuth'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { TeardownDataProvider } from '../hooks/useTeardownData'
-import { requestShareSignIn, resolveProtocolShare, verifyShareCode } from '../services/shareService'
+import { resolveProtocolShare, unlockProtocolShare } from '../services/shareService'
+import { clearShareSession, getShareSession } from '../services/shareSession'
 
 export function SharedProtocolEntry({ route, children }) {
-  const { user, logout } = useAuth()
   const [grant, setGrant] = useState(null)
   const [email, setEmail] = useState('')
-  const [code, setCode] = useState('')
-  const [sent, setSent] = useState(false)
+  const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
-  const [checking, setChecking] = useState(Boolean(user))
+  const [checking, setChecking] = useState(Boolean(getShareSession(route.token)))
   const [error, setError] = useState('')
+  const submitting = useRef(false)
   const denied = useCallback((failure) => {
+    clearShareSession(route.token)
     setGrant(null)
     setError(failure.message || 'Shared access could not be verified.')
-  }, [])
+  }, [route.token])
 
   useEffect(() => {
     let active = true
-    setGrant(null); setError('')
-    if (!route.token || !user) { setChecking(false); return }
+    let inFlight = false
     const check = async () => {
+      if (!route.token || !getShareSession(route.token) || inFlight) { setChecking(false); return }
+      inFlight = true
       try {
         const access = await resolveProtocolShare()
-        if (active) { setGrant({ ...access, userId: user.id, basePath: route.basePath }); setError('') }
+        if (active) { setGrant({ ...access, basePath: route.basePath }); setError('') }
       } catch (failure) { if (active) denied(failure) }
-      finally { if (active) setChecking(false) }
+      finally { inFlight = false; if (active) setChecking(false) }
     }
-    setChecking(true)
     check()
     const interval = setInterval(check, 30000)
     window.addEventListener('focus', check)
     return () => { active = false; clearInterval(interval); window.removeEventListener('focus', check) }
-  }, [route.token, route.basePath, user?.id, denied])
+  }, [route.token, route.basePath, denied])
 
-  if (grant?.userId === user?.id && grant?.basePath === route.basePath && user) {
-    return <TeardownDataProvider key={`${user.id}:${route.token}`} user={user} sharedAccess={grant} onShareDenied={denied}>{children}</TeardownDataProvider>
-  }
   const submit = async (event) => {
     event.preventDefault()
+    if (submitting.current) return
+    submitting.current = true
     setBusy(true); setError('')
     try {
-      if (sent) await verifyShareCode(email, code)
-      else {
-        await requestShareSignIn(email, new URL(route.basePath, window.location.origin).href)
-        setSent(true)
-      }
-    } catch (failure) { setError(failure.message) }
-    finally { setBusy(false) }
+      const access = await unlockProtocolShare(route.token, email, password)
+      setPassword('')
+      setGrant({ ...access, basePath: route.basePath })
+    } catch (failure) { denied(failure) }
+    finally { submitting.current = false; setBusy(false) }
+  }
+  if (grant?.basePath === route.basePath) {
+    return <TeardownDataProvider key={route.token} sharedAccess={grant} onShareDenied={denied}>{children}</TeardownDataProvider>
   }
   return <main className="share-entry manager-panel">
     <h1>Shared protocol</h1>
-    {!route.token ? <p role="alert">This share link is invalid.</p> : checking ? <p role="status">Checking shared access…</p> : user ? <>
-      <p>Signed in as {user.email}.</p>
+    {!route.token ? <p role="alert">This share link is invalid.</p> : checking ? <p role="status">Checking shared access…</p> : <form className="manager-form" onSubmit={submit}>
+      <p>Enter the email address this protocol was shared with and the password the manager gave you.</p>
+      <label>Email<input type="email" value={email} required autoComplete="username" disabled={busy} onChange={(event) => setEmail(event.target.value)} /></label>
+      <label>Share password<input type="password" value={password} required autoComplete="current-password" disabled={busy} onChange={(event) => setPassword(event.target.value)} /></label>
       {error ? <p role="alert">{error}</p> : null}
-      <button className="secondary-button" disabled={busy} type="button" onClick={async () => {
-        setBusy(true)
-        try { await logout(); setError(''); setSent(false); setCode('') }
-        catch (failure) { setError(failure.message) }
-        finally { setBusy(false) }
-      }}>Use a different email</button>
-    </> : <form className="manager-form" onSubmit={submit}>
-      <p>Use the email address the manager shared this protocol with. We’ll send a sign-in link to verify it.</p>
-      <label>Email<input type="email" value={email} required autoComplete="email" disabled={busy || sent} onChange={(event) => setEmail(event.target.value)} /></label>
-      {sent ? <>
-        <p role="status">Check your inbox and open the sign-in link. If your email contains a code, you can enter it here.</p>
-        <label>Email verification code<input value={code} required autoComplete="one-time-code" disabled={busy} onChange={(event) => setCode(event.target.value)} /></label>
-        <button className="secondary-button" type="button" disabled={busy} onClick={() => { setSent(false); setCode('') }}>Change email or resend</button>
-      </> : null}
-      {error ? <p role="alert">{error}</p> : null}
-      <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Working…' : sent ? 'Verify code' : 'Send sign-in link'}</button>
+      <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Checking…' : 'Open shared protocol'}</button>
+      <p>Forgot the password? Ask the manager for a new link and password.</p>
     </form>}
   </main>
 }
