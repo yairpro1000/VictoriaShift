@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 
-export function NamedEntityManager({ title, entityName, rows, onSave, onDelete, onReorder, disabled = false }) {
+export function NamedEntityManager({ title, entityName, rows, onSave, onDelete, onReorder, allowCreate = true, disabled = false }) {
   const drag = useRef(null)
   const [dropTarget, setDropTarget] = useState(null)
   const [name, setName] = useState('')
@@ -84,9 +84,9 @@ export function NamedEntityManager({ title, entityName, rows, onSave, onDelete, 
     <section className="manager-panel">
       <div className="manager-panel__header">
         <h2>{title}</h2>
-        <button className="secondary-button" type="button" onClick={reset} disabled={busy || disabled}>+ Add {entityName.toLowerCase()}</button>
+        {allowCreate ? <button className="secondary-button" type="button" onClick={reset} disabled={busy || disabled}>+ Add {entityName.toLowerCase()}</button> : null}
       </div>
-      {!editingId ? form : null}
+      {!editingId && allowCreate ? form : null}
       {status ? <p className="manager-status" role="status">{status}</p> : null}
       <div className="manager-list">
         {rows.map((row, index) => (

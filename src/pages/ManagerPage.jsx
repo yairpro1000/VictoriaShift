@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import { useTeardownData } from '../hooks/useTeardownData.jsx'
 import { NamedEntityManager } from '../components/NamedEntityManager'
+import { ProtocolShareForm } from '../components/ProtocolShareForm'
 import { ProtocolPicker } from '../components/ProtocolPicker'
 import { TaskCard } from '../components/TaskCard'
 
@@ -51,6 +52,7 @@ function groupTasksByCategory(categories, tasks) {
 export function ManagerPage() {
   const {
     user,
+    sharedAccess,
     currentCategories: categories,
     departmentProtocols,
     departments,
@@ -483,7 +485,7 @@ export function ManagerPage() {
             </div>
             <h1>Manager</h1>
           </div>
-          <Link className="header-link" to="/">
+          <Link className="header-link" to={sharedAccess?.basePath ?? "/"}>
             Back to board
           </Link>
         </div>
@@ -666,17 +668,18 @@ export function ManagerPage() {
         </div>
         <div id="manager-panel-protocols" role="tabpanel" aria-labelledby="manager-tab-protocols" hidden={activeTab !== 'protocols'}>
           <div className="manager-entity-panels">
-            <NamedEntityManager
+            {!sharedAccess ? <NamedEntityManager
               title="Departments"
               entityName="Department"
               rows={departments}
               onSave={saveDepartment}
               onDelete={removeDepartment}
               onReorder={saveDepartmentOrder}
-            />
+            /> : null}
             <NamedEntityManager
               key={selectedDepartmentId}
               title="Protocols"
+              allowCreate={!sharedAccess}
               entityName="Protocol"
               rows={protocols.filter((protocol) => protocol.department_id === selectedDepartmentId)}
               onSave={(draft, id) => saveProtocol({ ...draft, department_id: selectedDepartmentId }, id)}
@@ -684,6 +687,7 @@ export function ManagerPage() {
               disabled={!selectedDepartmentId}
             />
           </div>
+          {!sharedAccess ? <ProtocolShareForm key={selectedDepartmentId} protocols={departmentProtocols} selectedProtocolId={selectedProtocolId} /> : null}
           <section className="manager-panel manager-protocol">
             <ProtocolPicker
               key={selectedDepartmentId}

@@ -88,6 +88,7 @@ function buildHistoryGroups(tasks) {
 export function ChecklistPage() {
   const {
     user,
+    sharedAccess,
     approvalHistory,
     currentCategories,
     currentEmployeeId,
@@ -180,7 +181,7 @@ export function ChecklistPage() {
             />
             <p className="header-date">{todayLabel}</p>
           </div>
-          <Link className="header-link" to="/manager">
+          <Link className="header-link" to={sharedAccess ? `${sharedAccess.basePath}/manager` : "/manager"}>
             Manager
           </Link>
         </div>

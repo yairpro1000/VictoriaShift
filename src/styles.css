@@ -1304,3 +1304,5 @@ article {
 .category-add-task { margin-left: auto; border: 0; border-radius: 50%; width: 2rem; height: 2rem; font-size: 1.4rem; cursor: pointer; }
 [hidden] { display: none !important; }
 .manager-modal__card { max-height: 85vh; overflow-y: auto; }
+
+.share-entry { max-width: 32rem; margin: 3rem auto; }
