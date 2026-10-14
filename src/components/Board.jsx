@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTeardownData } from '../hooks/useTeardownData'
 import { TaskColumn } from './TaskColumn'
 
 export function Board({ tasksByStatus, onToggleTask, onSetTaskDone }) {
+  const { canEditProtocol, selectedProtocolId } = useTeardownData()
+  const editable = canEditProtocol(selectedProtocolId)
   const todoRef = useRef(null)
   const doneRef = useRef(null)
   const [isDoneVisible, setIsDoneVisible] = useState(false)
@@ -53,7 +56,7 @@ export function Board({ tasksByStatus, onToggleTask, onSetTaskDone }) {
         <TaskColumn
           ref={todoRef}
           title="TO DO"
-          helperText="Tap task to move to DONE."
+          helperText={editable ? "Tap task to move to DONE." : "View-only access"}
           count={todoCount}
           categories={tasksByStatus.todo.categories}
           isDoneColumn={false}
@@ -63,7 +66,7 @@ export function Board({ tasksByStatus, onToggleTask, onSetTaskDone }) {
         <TaskColumn
           ref={doneRef}
           title="DONE"
-          helperText="Tap task to send back to TO DO."
+          helperText={editable ? "Tap task to send back to TO DO." : "View-only access"}
           count={doneCount}
           categories={tasksByStatus.done.categories}
           isDoneColumn

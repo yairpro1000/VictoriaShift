@@ -37,6 +37,20 @@ export async function createProtocolShare(protocolId, email, password, origin = 
 }
 export const resolveProtocolShare = () => shareRpc('get_protocol_share', {})
 
+export async function createDepartmentShare(departmentId, email, password, permissions, isManager = false, origin = window.location.origin) {
+  const recipient = email.trim().toLowerCase()
+  console.info('department_share_validation_attempt', { hasDepartment: Boolean(departmentId), validEmail: validEmail(recipient), isManager, protocolCount: permissions?.length })
+  if (!departmentId || !validEmail(recipient) || !password || password.length < 8 || new TextEncoder().encode(password).length > 72
+    || typeof isManager !== 'boolean' || !Array.isArray(permissions) || !permissions.some(row => row.can_view)
+    || permissions.some(row => typeof row.can_view !== 'boolean' || typeof row.can_edit !== 'boolean' || (row.can_edit && !row.can_view))) {
+    console.info('department_share_validation_denied', { reason: 'invalid_department_credentials_or_permissions' })
+    throw new Error('Choose a department, valid email, password of at least 8 characters (up to 72 bytes), and at least one View permission.')
+  }
+  const result = await shareRpc('create_department_share', { department: departmentId, email: recipient, password, permissions, is_manager: isManager })
+  if (!/^[0-9a-f]{64}$/.test(result.token)) throw new Error('The server returned an invalid share link.')
+  return new URL(`/share/${result.token}`, origin).href
+}
+
 export async function unlockProtocolShare(token, email, password) {
   const recipient = email.trim().toLowerCase()
   console.info('share_unlock_validation', { validEmail: validEmail(recipient), hasPassword: Boolean(password), hasLink: /^[0-9a-f]{64}$/.test(token) })
@@ -53,5 +67,5 @@ export async function unlockProtocolShare(token, email, password) {
   setShareSession(token, result.session_token)
   // Only the opaque session is kept; passwords and email are never persisted.
   console.info('share_unlock_session_saved', { branch: getShareSession(token) ? 'session_available' : 'session_missing' })
-  return { protocol_id: result.protocol_id, department_id: result.department_id }
+  return { protocol_id: result.protocol_id, department_id: result.department_id, protocols: result.protocols, is_manager: result.is_manager }
 }

@@ -14,3 +14,15 @@ if ! docker exec -e PGPASSWORD=local-test-only -i "$container" psql -U supabase_
   exit 1
 fi
 node scripts/check-share-diagnostics.mjs "$diagnostics"
+docker exec -e PGPASSWORD=local-test-only -i "$container" psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261013172459_department_sharing_permissions.sql
+# The previous contract remains usable throughout a rolling deployment.
+if ! docker exec -e PGPASSWORD=local-test-only -i "$container" psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 < tests/protocol-password-sharing.sql > "$diagnostics" 2>&1; then
+  cat "$diagnostics"
+  exit 1
+fi
+node scripts/check-share-diagnostics.mjs "$diagnostics"
+if ! docker exec -e PGPASSWORD=local-test-only -i "$container" psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 < tests/department-sharing.sql > "$diagnostics" 2>&1; then
+  cat "$diagnostics"
+  exit 1
+fi
+node scripts/check-department-diagnostics.mjs "$diagnostics"

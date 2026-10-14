@@ -1,7 +1,7 @@
 export function shareRoute(pathname = '') {
   if (!pathname.startsWith('/share/')) return null
   const match = pathname.match(/^\/share\/([0-9a-f]{64})(?:\/manager)?\/?$/)
-  return { token: match?.[1] ?? null, basePath: match ? `/share/${match[1]}` : '/share/invalid' }
+  return { token: match?.[1] ?? null, basePath: match ? `/share/${match[1]}` : '/share/invalid', isManager: Boolean(match && /\/manager\/?$/.test(pathname)) }
 }
 
 export function shareAwareFetch(fetcher, getPathname, getSession = () => null) {
@@ -10,8 +10,10 @@ export function shareAwareFetch(fetcher, getPathname, getSession = () => null) {
     const route = shareRoute(getPathname())
     // Even malformed share URLs must not fall back to public/owner data.
     headers.delete('x-protocol-session')
+    headers.delete('x-protocol-manager')
     if (route) {
       headers.set('x-protocol-share', route.token ?? 'invalid')
+      if (route.isManager) headers.set('x-protocol-manager', 'true')
       const session = route.token ? getSession(route.token) : null
       if (session) headers.set('x-protocol-session', session)
     }

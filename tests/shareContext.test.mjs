@@ -24,7 +24,16 @@ test('session secret is tied to one link and stripped from ordinary and malforme
   }
   assert.equal(requests[0].get('x-protocol-session'),session)
   assert.equal(requests[1].get('x-protocol-session'),session)
+  assert.equal(requests[0].get('x-protocol-manager'),null)
+  assert.equal(requests[1].get('x-protocol-manager'),'true')
   for (const request of requests.slice(2)) assert.equal(request.get('x-protocol-session'),null)
+})
+test('a supplied manager header cannot bleed into the board or normal app', async () => {
+  const headers = []
+  for (const path of ['/', '/share/' + token, '/share/invalid']) {
+    await shareAwareFetch(async (_,options) => headers.push(options.headers), () => path)('https://example.com', { headers: {'x-protocol-manager':'true'} })
+  }
+  for (const header of headers) assert.equal(header.get('x-protocol-manager'),null)
 })
 test('share header is request-local, preserves authorization and clears on normal navigation', async () => {
   let path = '/share/' + token

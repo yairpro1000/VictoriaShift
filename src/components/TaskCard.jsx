@@ -25,14 +25,15 @@ function formatCompletedTime(completedAt) {
 }
 
 export function TaskCard({ task, category, onToggle, interactive = true }) {
-  const { user } = useTeardownData()
+  const { user, sharedAccess, canEditProtocol } = useTeardownData()
+  interactive = interactive && canEditProtocol(category.protocol_id)
   const [managing, setManaging] = useState(false)
   const timer = useRef(null)
   const pointer = useRef(null)
   const suppressClick = useRef(false)
   const clearPress = () => { clearTimeout(timer.current); timer.current = null }
   useEffect(() => () => clearTimeout(timer.current), [])
-  const privateMode = Boolean(user) && interactive
+  const privateMode = Boolean(user || sharedAccess) && interactive
   const TaskIcon = getTaskIcon(task.id)
 
   const handleDragStart = (event) => {
@@ -103,7 +104,7 @@ export function TaskCard({ task, category, onToggle, interactive = true }) {
         {doneMeta ? <p className="task-card__meta">{doneMeta}</p> : null}
       </div>
     </article>
-    {managing ? <PrivateTaskEditor task={task} category={category} onClose={() => setManaging(false)} /> : null}
+    {managing && interactive ? <PrivateTaskEditor task={task} category={category} onClose={() => setManaging(false)} /> : null}
     </>
   )
 }
