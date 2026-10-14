@@ -1,0 +1,14 @@
+-- Disposable local database only; run after scripts/test-protocol-sharing-db.sh.
+insert into public.departments(id,name,user_id) values('20000000-0000-4000-8000-000000000003','Department sharing demo',null);
+insert into public.protocols(id,department_id,name,sort_order) values
+('30000000-0000-4000-8000-000000000011','20000000-0000-4000-8000-000000000003','Opening',1),
+('30000000-0000-4000-8000-000000000012','20000000-0000-4000-8000-000000000003','Closing',2),
+('30000000-0000-4000-8000-000000000013','20000000-0000-4000-8000-000000000003','Stockroom',3);
+insert into public.categories(id,protocol_id,name) values
+('40000000-0000-4000-8000-000000000011','30000000-0000-4000-8000-000000000011','Opening tasks'),
+('40000000-0000-4000-8000-000000000012','30000000-0000-4000-8000-000000000012','Closing tasks'),
+('40000000-0000-4000-8000-000000000013','30000000-0000-4000-8000-000000000013','Stockroom tasks');
+insert into public.tasks(category_id,name) values
+('40000000-0000-4000-8000-000000000011','Unlock the doors'),
+('40000000-0000-4000-8000-000000000012','Clean the counter'),
+('40000000-0000-4000-8000-000000000013','Count supplies');

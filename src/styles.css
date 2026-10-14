@@ -1306,3 +1306,11 @@ article {
 .manager-modal__card { max-height: 85vh; overflow-y: auto; }
 
 .share-entry { max-width: 32rem; margin: 3rem auto; }
+
+.share-permissions { border: 1px solid var(--border, #d8d6cf); border-radius: 14px; padding: 16px; }
+.share-permissions summary { cursor: pointer; font-weight: 700; }
+.share-permissions table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.share-permissions th, .share-permissions td { padding: 12px 6px; border-bottom: 1px solid #dedbd3; text-align: center; }
+.share-permissions th:first-child { text-align: left; overflow-wrap: anywhere; }
+.share-permissions input[type="checkbox"], .share-manager-permission input[type="checkbox"] { width: 22px; height: 22px; margin: 0; accent-color: #2e8c50; }
+.manager-form .share-manager-permission { display: flex; align-items: center; gap: 12px; }

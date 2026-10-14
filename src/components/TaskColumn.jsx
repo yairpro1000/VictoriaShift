@@ -1,5 +1,6 @@
 import { forwardRef } from 'react'
 import { CategorySection } from './CategorySection'
+import { useTeardownData } from '../hooks/useTeardownData'
 
 export const TaskColumn = forwardRef(function TaskColumn({
   title,
@@ -10,6 +11,8 @@ export const TaskColumn = forwardRef(function TaskColumn({
   onToggleTask,
   onSetTaskDone,
 }, ref) {
+  const { canEditProtocol, selectedProtocolId } = useTeardownData()
+  const editable = canEditProtocol(selectedProtocolId)
   const handleDragOver = (event) => {
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
@@ -30,8 +33,8 @@ export const TaskColumn = forwardRef(function TaskColumn({
     <section
       ref={ref}
       className={`task-column${isDoneColumn ? ' task-column--done' : ''}`}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
+      onDragOver={editable ? handleDragOver : undefined}
+      onDrop={editable ? handleDrop : undefined}
     >
       <header className="task-column__header">
         <h2>

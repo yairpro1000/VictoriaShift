@@ -89,3 +89,29 @@ test('malformed server session is rejected without storing it', async () => {
   assert.equal(shareSession.getShareSession(token),null)
   assert.equal(logs.at(-1)[1].reason,'invalid_server_session')
 })
+test('department share sends the exact permissions and manager flag without logging secrets', async () => {
+  const { api,calls,logs } = await setup()
+  const permissions=[{protocol_id:'a',can_view:true,can_edit:false},{protocol_id:'b',can_view:true,can_edit:true}]
+  assert.equal(await api.createDepartmentShare('department',' PERSON@example.com ','share-password',permissions,true,'https://app.example'),'https://app.example/share/'+token)
+  assert.equal(calls[0][1],'create_department_share')
+  assert.equal(calls[0][2].is_manager,true)
+  assert.equal(calls[0][2].email,'person@example.com')
+  assert.equal(calls[0][2].permissions,permissions)
+  for (const secret of [token,'person@example.com','share-password']) assert.ok(!JSON.stringify(logs).includes(secret))
+})
+test('department shares reject no view access and edit without view before requesting the server', async () => {
+  for (const permissions of [[],[{protocol_id:'a',can_view:false,can_edit:true}],[{protocol_id:'a',can_view:false,can_edit:false}]]) {
+    const { api,calls,logs }=await setup()
+    await assert.rejects(api.createDepartmentShare('department','person@example.com','share-password',permissions,false,'https://app.example'),/View permission/)
+    assert.equal(calls.length,0)
+    assert.equal(logs.at(-1)[1].reason,'invalid_department_credentials_or_permissions')
+  }
+})
+test('unlock retains department permissions and manager flag', async () => {
+  const permissions=[{protocol_id:'a',can_view:true,can_edit:false}]
+  const { api }=await setup({rpcResult:{data:{ok:true,data:{session_token:'f'.repeat(64),department_id:'department',protocols:permissions,is_manager:false}}}})
+  const access=await api.unlockProtocolShare(token,'person@example.com','share-password')
+  assert.equal(access.protocols,permissions)
+  assert.equal(access.is_manager,false)
+  assert.equal(access.session_token,undefined)
+})

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 
-export function NamedEntityManager({ title, entityName, rows, onSave, onDelete, onReorder, allowCreate = true, disabled = false }) {
+export function NamedEntityManager({ title, entityName, rows, onSave, onDelete, onReorder, allowCreate = true, canEditRow = () => true, disabled = false }) {
   const drag = useRef(null)
   const [dropTarget, setDropTarget] = useState(null)
   const [name, setName] = useState('')
@@ -129,17 +129,17 @@ export function NamedEntityManager({ title, entityName, rows, onSave, onDelete, 
               >⠿</button>
             ) : null}
             <p className="manager-item__title">{row.name}</p>
-            {editingId === row.id ? form : null}
-            <div className="manager-item__actions">
+            {editingId === row.id && canEditRow(row.id) ? form : null}
+            {canEditRow(row.id) ? <div className="manager-item__actions">
               {editingId !== row.id ? (
                 <button className="secondary-button" type="button" disabled={busy} onClick={() => { setEditingId(row.id); setName(row.name); setStatus('') }}>Edit</button>
               ) : null}
               <button className="danger-button" type="button" disabled={busy} onClick={() => setDeletingRow(row)}>Delete</button>
-            </div>
+            </div> : <span>View only</span>}
           </article>
         ))}
       </div>
-      {deletingRow ? (
+      {deletingRow && canEditRow(deletingRow.id) ? (
         <div className="manager-modal" role="dialog" aria-modal="true" aria-label={`Delete ${entityName.toLowerCase()}?`}>
           <div className="manager-modal__card manager-modal__card--danger">
             <h2>Delete {entityName.toLowerCase()}?</h2>

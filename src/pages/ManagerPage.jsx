@@ -53,6 +53,8 @@ export function ManagerPage() {
   const {
     user,
     sharedAccess,
+    canEditProtocol,
+    selectedDepartment,
     currentCategories: categories,
     departmentProtocols,
     departments,
@@ -680,6 +682,7 @@ export function ManagerPage() {
               key={selectedDepartmentId}
               title="Protocols"
               allowCreate={!sharedAccess}
+              canEditRow={canEditProtocol}
               entityName="Protocol"
               rows={protocols.filter((protocol) => protocol.department_id === selectedDepartmentId)}
               onSave={(draft, id) => saveProtocol({ ...draft, department_id: selectedDepartmentId }, id)}
@@ -687,7 +690,7 @@ export function ManagerPage() {
               disabled={!selectedDepartmentId}
             />
           </div>
-          {!sharedAccess ? <ProtocolShareForm key={selectedDepartmentId} protocols={departmentProtocols} selectedProtocolId={selectedProtocolId} /> : null}
+          {!sharedAccess ? <ProtocolShareForm key={selectedDepartmentId} protocols={departmentProtocols} department={selectedDepartment} /> : null}
           <section className="manager-panel manager-protocol">
             <ProtocolPicker
               key={selectedDepartmentId}
@@ -697,7 +700,8 @@ export function ManagerPage() {
               onSelect={setSelectedProtocolId}
             />
           </section>
-          {selectedProtocol ? (
+          {selectedProtocol && !canEditProtocol(selectedProtocolId) ? <p role="status">You have view-only access to this protocol. Open the board to view its tasks.</p> : null}
+          {selectedProtocol && canEditProtocol(selectedProtocolId) ? (
           <div className="manager-shift-grid">
         <section className="manager-panel">
           <div className="manager-panel__header">

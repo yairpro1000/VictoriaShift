@@ -181,9 +181,9 @@ export function ChecklistPage() {
             />
             <p className="header-date">{todayLabel}</p>
           </div>
-          <Link className="header-link" to={sharedAccess ? `${sharedAccess.basePath}/manager` : "/manager"}>
+          {!sharedAccess || sharedAccess.is_manager !== false ? <Link className="header-link" to={sharedAccess ? `${sharedAccess.basePath}/manager` : "/manager"}>
             Manager
-          </Link>
+          </Link> : null}
         </div>
         <div hidden={Boolean(user || sharedAccess)} className="view-tabs" role="tablist" aria-label="Checklist views">
           <button

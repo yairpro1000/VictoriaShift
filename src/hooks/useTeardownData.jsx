@@ -31,6 +31,7 @@ import { supabase } from '../services/supabaseClient'
 import { resolveBoardSelection, categoriesForSelection } from '../services/boardSelection'
 
 import { resolveProtocolShare } from '../services/shareService'
+import { accessProtocols, mayEditProtocol } from '../services/sharePermissions'
 
 const TeardownDataContext = createContext(null)
 
@@ -149,6 +150,14 @@ function defaultHistoryFromDate() {
 }
 
 export function TeardownDataProvider({ children, user = null, sharedAccess = null, onShareDenied }) {
+  const [currentAccess, setCurrentAccess] = useState(sharedAccess)
+  const canEditProtocol = (id) => mayEditProtocol(currentAccess, id)
+  const requireEdit = (id) => {
+    if (!canEditProtocol(id)) {
+      console.info('shared_edit_denied', { protocolId: id, reason: 'protocol_edit_permission_missing' })
+      throw new Error('You have view-only access to this protocol.')
+    }
+  }
   const scope = user?.id ?? 'public'
   const [cachedBoard] = useState(() => sharedAccess ? null : loadCachedBoard(scope))
   const [categories, setCategories] = useState(cachedBoard?.categories ?? [])
@@ -157,7 +166,7 @@ export function TeardownDataProvider({ children, user = null, sharedAccess = nul
   const [departments, setDepartments] = useState(cachedBoard?.departments ?? [])
   const [protocols, setProtocols] = useState(cachedBoard?.protocols ?? [])
   const [selection, setSelection] = useState(() => sharedAccess
-    ? { selectedDepartmentId: sharedAccess.department_id, selectedProtocolId: sharedAccess.protocol_id }
+    ? { selectedDepartmentId: sharedAccess.department_id, selectedProtocolId: accessProtocols(sharedAccess)[0]?.protocol_id ?? '' }
     : loadBoardSelection(scope))
   const { selectedDepartmentId, selectedProtocolId } = resolveBoardSelection(departments, protocols, selection)
   const setSelectedDepartmentId = (id) => setSelection((current) => ({
@@ -190,7 +199,7 @@ export function TeardownDataProvider({ children, user = null, sharedAccess = nul
       setErrorMessage('')
 
       try {
-        if (sharedAccess) await resolveProtocolShare()
+        const access = sharedAccess ? await resolveProtocolShare() : null
         const [
           fetchedCategories,
           fetchedTasks,
@@ -209,12 +218,14 @@ export function TeardownDataProvider({ children, user = null, sharedAccess = nul
           return
         }
 
-        const nextCategories = sortCategories(sharedAccess ? fetchedCategories.filter((row) => row.protocol_id === sharedAccess.protocol_id) : fetchedCategories)
+        if (access) setCurrentAccess({ ...access, basePath: sharedAccess.basePath })
+        const visibleProtocolIds = new Set(accessProtocols(access).filter(row => row.can_view).map(row => row.protocol_id))
+        const nextCategories = sortCategories(sharedAccess ? fetchedCategories.filter((row) => visibleProtocolIds.has(row.protocol_id)) : fetchedCategories)
         const categoryIds = new Set(nextCategories.map((row) => row.id))
         const nextTasks = sortTasks(sharedAccess ? fetchedTasks.filter((row) => categoryIds.has(row.category_id)) : fetchedTasks)
         const nextEmployees = sortEmployees(sharedAccess ? [] : fetchedEmployees)
         const nextDepartments = sortByOrderThenName(sharedAccess ? fetchedDepartments.filter((row) => row.id === sharedAccess.department_id) : fetchedDepartments)
-        const nextProtocols = sortByOrderThenName(sharedAccess ? fetchedProtocols.filter((row) => row.id === sharedAccess.protocol_id) : fetchedProtocols)
+        const nextProtocols = sortByOrderThenName(sharedAccess ? fetchedProtocols.filter((row) => visibleProtocolIds.has(row.id)) : fetchedProtocols)
         setCategories(nextCategories)
         setTasks(nextTasks)
         setEmployees(nextEmployees)
@@ -411,6 +422,9 @@ export function TeardownDataProvider({ children, user = null, sharedAccess = nul
   }, [selectedDepartmentId, selectedProtocolId, historyFromDate, historyToDate])
 
   const setTaskDone = async (taskId, done) => {
+    const task = tasks.find(row => row.id === taskId)
+    const protocol = categories.find(row => row.id === task?.category_id)?.protocol_id
+    if (!canEditProtocol(protocol)) { setSyncMessage('You have view-only access to this protocol.'); return }
     const completedAt = done ? new Date().toISOString() : null
     const completedBy = done && !user && !sharedAccess ? currentEmployeeId : null
     const completedByEmployee =
@@ -639,6 +653,7 @@ export function TeardownDataProvider({ children, user = null, sharedAccess = nul
   }
 
   const saveProtocol = async (draft, protocolId) => {
+    requireEdit(protocolId)
     const savedProtocol = protocolId ? await updateProtocol(protocolId, draft) : await createProtocol(draft)
     setProtocols((current) => sortByOrderThenName(upsertRow(current, savedProtocol)))
     setSelection({ selectedDepartmentId: savedProtocol.department_id, selectedProtocolId: savedProtocol.id })
@@ -676,11 +691,14 @@ export function TeardownDataProvider({ children, user = null, sharedAccess = nul
   }
 
   const removeProtocol = async (id) => {
+    requireEdit(id)
     await deleteProtocol(id)
     setProtocols((current) => current.filter((row) => row.id !== id))
   }
 
   const saveCategory = async (draft, categoryId) => {
+    if (categoryId) requireEdit(categories.find(row => row.id === categoryId)?.protocol_id)
+    requireEdit(draft.protocol_id || selectedProtocolId)
     const payload = {
       protocol_id: draft.protocol_id || selectedProtocolId,
       name: draft.name.trim(),
@@ -697,6 +715,7 @@ export function TeardownDataProvider({ children, user = null, sharedAccess = nul
   }
 
   const removeCategory = async (categoryId) => {
+    requireEdit(categories.find(row => row.id === categoryId)?.protocol_id)
     if (tasks.some((task) => task.category_id === categoryId)) {
       throw new Error('Delete the tasks in this category before removing it.')
     }
@@ -706,6 +725,8 @@ export function TeardownDataProvider({ children, user = null, sharedAccess = nul
   }
 
   const saveTask = async (draft, taskId) => {
+    if (taskId) requireEdit(categories.find(row => row.id === tasks.find(task => task.id === taskId)?.category_id)?.protocol_id)
+    requireEdit(categories.find(row => row.id === draft.category_id)?.protocol_id)
     const payload = {
       category_id: draft.category_id,
       name: draft.name.trim(),
@@ -725,6 +746,7 @@ export function TeardownDataProvider({ children, user = null, sharedAccess = nul
   }
 
   const removeTask = async (taskId) => {
+    requireEdit(categories.find(row => row.id === tasks.find(task => task.id === taskId)?.category_id)?.protocol_id)
     await deleteTask(taskId)
     setTasks((current) => current.filter((task) => task.id !== taskId))
   }
@@ -760,7 +782,8 @@ export function TeardownDataProvider({ children, user = null, sharedAccess = nul
 
   const value = {
     user,
-    sharedAccess,
+    sharedAccess: currentAccess,
+    canEditProtocol,
     categories,
     currentCategories,
     currentEmployeeId,

@@ -11,7 +11,8 @@ export function CategorySection({
   onToggleTask,
   onSetTaskDone,
 }) {
-  const { user } = useTeardownData()
+  const { user, sharedAccess, canEditProtocol } = useTeardownData()
+  const editable = canEditProtocol(category.protocol_id)
   const [adding, setAdding] = useState(false)
   const allDone = tasks.length > 0 && tasks.every((task) => task.done)
   const CategoryIcon = getCategoryIcon(category.id)
@@ -35,8 +36,8 @@ export function CategorySection({
   return (
     <section
       className={`category-section${allDone ? ' category-section--complete' : ''}`}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
+      onDragOver={editable ? handleDragOver : undefined}
+      onDrop={editable ? handleDrop : undefined}
       aria-label={category.name}
       style={{
         '--category-color': category.color,
@@ -51,10 +52,10 @@ export function CategorySection({
           ) : null}
           {category.name}
         </h3>
-        {user ? <button className="category-add-task" type="button" aria-label={`Add task to ${category.name}`} onClick={() => setAdding(true)}>+</button> : null}
+        {(user || sharedAccess) && editable ? <button className="category-add-task" type="button" aria-label={`Add task to ${category.name}`} onClick={() => setAdding(true)}>+</button> : null}
         <span>{tasks.length}</span>
       </div>
-      {adding ? <PrivateTaskEditor category={category} onClose={() => setAdding(false)} /> : null}
+      {adding && editable ? <PrivateTaskEditor category={category} onClose={() => setAdding(false)} /> : null}
       <div className="category-section__tasks">
         {tasks.map((task) => (
           <TaskCard
