@@ -14,8 +14,20 @@ export function CategorySection({
   const { user, sharedAccess, canEditProtocol } = useTeardownData()
   const editable = canEditProtocol(category.protocol_id)
   const [adding, setAdding] = useState(false)
+  const [movingAll, setMovingAll] = useState(false)
   const allDone = tasks.length > 0 && tasks.every((task) => task.done)
   const CategoryIcon = getCategoryIcon(category.id)
+
+  const handleMoveAll = async () => {
+    if (!user || !editable || movingAll) return
+
+    setMovingAll(true)
+    try {
+      await Promise.all(tasks.map((task) => onSetTaskDone(task.id, !isDoneColumn)))
+    } finally {
+      setMovingAll(false)
+    }
+  }
 
   const handleDragOver = (event) => {
     event.preventDefault()
@@ -55,6 +67,17 @@ export function CategorySection({
         {(user || sharedAccess) && editable ? <button className="category-add-task" type="button" aria-label={`Add task to ${category.name}`} onClick={() => setAdding(true)}>+</button> : null}
         <span>{tasks.length}</span>
       </div>
+      {user && editable && tasks.length > 0 ? (
+        <button
+          className="category-move-all"
+          type="button"
+          disabled={movingAll}
+          aria-label={`${isDoneColumn ? 'Reset all to TO DO' : 'Move all to DONE'} in ${category.name}`}
+          onClick={handleMoveAll}
+        >
+          {movingAll ? 'Moving…' : isDoneColumn ? 'Reset all to TO DO' : 'Move all to DONE'}
+        </button>
+      ) : null}
       {adding && editable ? <PrivateTaskEditor category={category} onClose={() => setAdding(false)} /> : null}
       <div className="category-section__tasks">
         {tasks.map((task) => (
