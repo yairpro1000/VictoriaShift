@@ -546,6 +546,28 @@ article {
   gap: 0.65rem;
 }
 
+.category-move-all {
+  margin-bottom: 0.7rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--category-color) 45%, white);
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.75);
+  color: inherit;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.category-move-all:hover:not(:disabled) {
+  background: white;
+}
+
+.category-move-all:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .task-card {
   position: relative;
   display: flex;
